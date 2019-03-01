@@ -1,6 +1,6 @@
 import pytest
 import boto3
-import moto
+from moto import mock_s3
 from tests.mock_helper import MockHelper
 
 """ HOW TO USE MOCK HELPER 
@@ -28,5 +28,4 @@ from tests.mock_helper import MockHelper
 
     Since this is dynamically generated data, no 2 runs will have the same dataframes / parquet files / bucket names. 
 """ 
-
 

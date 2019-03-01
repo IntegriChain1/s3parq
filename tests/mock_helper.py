@@ -47,9 +47,6 @@ class MockHelper:
     
 
     def setup_partitioned_parquet(self):
-        """ pushes parquet to s3 and returns a tuple with the bucket
-            and the matching pandas df.
-        """
         bucket_name = self.random_bucket_name()
         t = tempfile.mkdtemp()
         s3_client = boto3.client('s3')
@@ -64,10 +61,17 @@ class MockHelper:
 
         ## traverse the local parquet tree
         paths = ''
+        extra_args = {'partition_data_types': str(
+                       {"string_col":"string",
+                        "int_col":"integer",
+                        "float_col":"float",
+                        "bool_col":"boolean",
+                        "datetime_col":"datetime"
+                        })}
         for subdir, dirs, files in os.walk(str(t)):
             for file in files:
                 full_path = os.path.join(subdir, file)
                 with open(full_path, 'rb') as data:
                     path = full_path[1:]#[len(str(1))+1:]
-                    s3_client.put_object(Bucket=bucket_name,Key=path, Body=data)
-        
+                    s3_client.upload_fileobj(data, Bucket=bucket_name,Key=path, ExtraArgs={"Metadata": extra_args})
+        return bucket_name
