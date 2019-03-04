@@ -16,9 +16,9 @@ class Test():
         "bucket": "fake-bucket",
         "prefix": "fake-prefix",
         "filters": [
-            "partition": "fake-partition",
+            {"partition": "fake-partition",
             "comparison": "==",
-            "value": "fake-value"
+            "value": "fake-value"}
         ]
     }
 
