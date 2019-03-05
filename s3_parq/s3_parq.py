@@ -1,5 +1,5 @@
 import boto3
-from .s3_parq_publish import S3ParqPublish
+from .publish_parq import S3PublishParq
 import pandas as pd
 import sys
 
@@ -13,7 +13,7 @@ class S3Parq:
         required_attributes = ('dataset', 'bucket', 'dataframe',)
         self._check_required_attr(required_attributes)
 
-        publish = S3ParqPublish(dataset=self.dataset,
+        publish = S3PublishParq(dataset=self.dataset,
                                 bucket=self.bucket,
                                 key_prefix=self.key_prefix,
                                 dataframe=self.dataframe)
@@ -85,10 +85,10 @@ class S3Parq:
                   ('key_prefix', str,),
                   ('dataframe', pd.DataFrame,),
                   ('filters', dict,)]:
-        if attr == k[0]:
-            if not isinstance(value, k[1]):
-                raise TypeError(
-                    f"Bad value for {attr}; {value} is not an instance of {k[1]}")
+            if attr == k[0]:
+                if not isinstance(value, k[1]):
+                    raise TypeError(
+                        f"Bad value for {attr}; {value} is not an instance of {k[1]}")
 
     def _set_kwargs_as_attrs(self, **kwargs)->None:
         """ type check and set instance attributes."""
