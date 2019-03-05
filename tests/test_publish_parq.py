@@ -1,23 +1,22 @@
 import pytest
 import pandas as pd
+from moto import mock_s3
 from dfmock import DFMock
 from s3_parq import S3Parq
+from .mock_helper import MockHelper
 
-
+@mock_s3
 class Test:
 
     strings = ("bucket","dataset","key_prefix",)
-
-    
     def parq_setup_exclude(self, to_exclude):
-        df = DFMock()
-        df.generate_dataframe()
+        df = MockHelper(count=100).dataframe 
         defaults ={
         'bucket':'safebucketname',
         'dataset' : 'safedatasetname',
         'key_prefix' : 'safekeyprefixname',
         'filters' :{"filtered_thing":"filter_val"},
-        'dataframe' : df.dataframe
+        'dataframe' : df
         }
         parq = S3Parq()
         for a in defaults.keys():
@@ -73,8 +72,18 @@ class Test:
             parq.dataframe = df.dataframe
 
 # accepts valid column names as partitions
+    def test_accepts_valid_partitions(self):
+        parq = self.parq_setup_exclude([])
+        partitions = parq.dataframe.columns[:1]
+        parq.publish(partitions=partitions)
 
 # only accepts valid column names as partitions
+    def test_accepts_valid_partitions(self):
+        parq = self.parq_setup_exclude([])
+        partitions = parq.dataframe.columns[:1]
+        partitions += ('banana')
+        with pytest.raises(ValueError):
+            parq.publish(partitions=partitions)
 
 # generates partitions in order
 

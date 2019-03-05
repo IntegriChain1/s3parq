@@ -17,9 +17,11 @@ class MockHelper:
         be sure to wrap this with moto @mock_s3 if you want to mock it
     """ 
 
-    def __init__(self):
-        self._dataframe = self.setup_grouped_dataframe()
-        self._s3_bucket = self.setup_partitioned_parquet()
+    def __init__(self, count=1000000, s3=False):
+        """ If s3 then will populate the s3 bucket with partitioned parquet. """
+        self._dataframe = self.setup_grouped_dataframe(count=count)
+        if s3:
+            self._s3_bucket = self.setup_partitioned_parquet()
         
 
     @property
@@ -30,7 +32,7 @@ class MockHelper:
     def s3_bucket(self):
         return self._s3_bucket
 
-    def setup_grouped_dataframe(self,count=1000000):
+    def setup_grouped_dataframe(self,count):
         df = DFMock()
         df.count = count
         df.columns = {  "string_col": {"option_count":3, "option_type":"string"},

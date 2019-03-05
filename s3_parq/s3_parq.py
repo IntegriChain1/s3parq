@@ -9,14 +9,15 @@ class S3Parq:
     def __init__(self, **kwargs):
         self._set_kwargs_as_attrs(**kwargs)
 
-    def publish(self)->None:
+    def publish(self, partitions:iter=set())->None:
         required_attributes = ('dataset', 'bucket', 'dataframe',)
         self._check_required_attr(required_attributes)
 
         publish = S3PublishParq(dataset=self.dataset,
                                 bucket=self.bucket,
                                 dataframe=self.dataframe,
-                                key_prefix=getattr(self,"key_prefix",'')
+                                key_prefix=getattr(self,"key_prefix",''),
+                                partitions=partitions
                                 )
         return publish.do_publish()
 
