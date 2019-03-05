@@ -50,6 +50,11 @@ class S3Parq:
     @dataframe.setter
     def dataframe(self, dataframe: pd.DataFrame)->None:
         self._type_check_attr('dataframe', dataframe)
+        ## cannot support timedelta at this time
+        for tp in dataframe.dtypes:
+            if tp.name.startswith('timedelta'):
+                raise NotImplementedError("Sorry, pyarrow does not support parquet conversion of timedelta columns to parquet.")
+
         self._dataframe = dataframe
 
     @property

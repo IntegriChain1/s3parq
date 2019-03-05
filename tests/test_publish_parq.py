@@ -63,10 +63,14 @@ class Test:
                 setattr(parq,s,['this is not a string'])
 
 
-
-# optionally accepts valid key prefix
-
 # raises not implemented error for timedelta column types
+    def test_not_implemented_timedelta(self):
+        df = DFMock(count=100)
+        df.columns = {"time":"timedelta","stringer":"string"}
+        df.generate_dataframe()
+        parq = S3Parq()
+        with pytest.raises(NotImplementedError):
+            parq.dataframe = df.dataframe
 
 # accepts valid column names as partitions
 
