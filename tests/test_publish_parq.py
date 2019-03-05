@@ -5,43 +5,64 @@ from s3_parq import S3Parq
 
 
 class Test:
+
+    strings = ("bucket","dataset","key_prefix",)
+
+    
+    def parq_setup_exclude(self, to_exclude):
+        df = DFMock()
+        df.generate_dataframe()
+        defaults ={
+        'bucket':'safebucketname',
+        'dataset' : 'safedatasetname',
+        'key_prefix' : 'safekeyprefixname',
+        'filters' :{"filtered_thing":"filter_val"},
+        'dataframe' : df.dataframe
+        }
+        parq = S3Parq()
+        for a in defaults.keys():
+            if a not in to_exclude:
+                setattr(parq,a,defaults[a])
+        return parq
+
     # requires dataframe
     def test_requires_dataframe(self):
-        with pytest.raises(TypeError):
-            parq = S3Parq(bucket="test_bucket",
-                          dataset="test_dataset"
-                          )
+        parq = self.parq_setup_exclude(('dataframe',))
+        with pytest.raises(ValueError):
             parq.publish()
 
     # only accepts dataframe
     def test_accepts_only_dataframe(self):
         with pytest.raises(TypeError):
-            parq = S3Parq(bucket="test_bucket",
-                          dataframe="I am not a dataframe!",
-                          dataset="test_dataset"
-                          )
-            parq.publish()
+            parq = self.parq_setup_exclude(('dataframe',))
+            parq.dataframe = 'not a dataframe'
 
     # accepts good dataframe
-    def test_accepts_only_dataframe(self):
-        df = DFMock()
-        df.generate_dataframe()
-        parq = S3Parq(bucket="test_bucket",
-                      dataframe=df.dataframe,
-                      dataset="test_dataset"
-                      )
-
-    # requires bucket
-    def test_requires_bucket(self):
-        df = DFMock()
-        df.generate_dataframe()
-        with pytest.raises(TypeError):
-            parq = S3Parq(dataset="test_dataset",
-                          dataframe=df.dataframe
-                          )
+    def test_accepts_valid_dataframe(self):
+            parq = self.parq_setup_exclude([])
             parq.publish()
 
-# requires dataset name
+    # accepts good string
+    def test_accepts_valid_dataframe(self):
+        parq = self.parq_setup_exclude([])
+        parq.publish()
+
+    # requires string
+    def test_requires_string(self):
+        for s in self.strings:
+            if s != 'key_prefix':
+                with pytest.raises(ValueError):
+                    parq = self.parq_setup_exclude((s,))
+                    parq.publish()
+
+    # only accepts string
+    def test_accepts_only_string(self):
+        for s in self.strings:
+            parq = self.parq_setup_exclude([])
+            with pytest.raises(TypeError):
+                setattr(parq,s,['this is not a string'])
+
+
 
 # optionally accepts valid key prefix
 

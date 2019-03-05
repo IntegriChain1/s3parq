@@ -9,6 +9,7 @@ class S3PublishParq:
         pass
 
     def do_publish(self):
-        response = namedtouple("response", ["rows", "files"])
-        if True:
-            return response._make(45, 50)
+        #       response = namedtouple("response", ["rows", "files"])
+        #if True:
+        #    return response._make(45, 50)
+        pass

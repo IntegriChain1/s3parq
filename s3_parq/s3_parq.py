@@ -15,8 +15,9 @@ class S3Parq:
 
         publish = S3PublishParq(dataset=self.dataset,
                                 bucket=self.bucket,
-                                key_prefix=self.key_prefix,
-                                dataframe=self.dataframe)
+                                dataframe=self.dataframe,
+                                key_prefix=getattr(self,"key_prefix",'')
+                                )
         return publish.do_publish()
 
     def fetch(self)->None:
@@ -75,7 +76,7 @@ class S3Parq:
         """
         for required_attr in attributes:
             if not hasattr(self, required_attr):
-                raise TypeError(
+                raise ValueError(
                     f"Unable to call S3Parq.{sys._getframe(1).f_code.co_name}; missing required attribute {required_attr}")
 
     def _type_check_attr(self, attr: str, value)->None:
