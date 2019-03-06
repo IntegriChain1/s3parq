@@ -1,5 +1,6 @@
 import boto3
 from .publish_parq import S3PublishParq
+#from .fetch_parq import S3FetchParq
 import pandas as pd
 import sys
 
@@ -9,23 +10,37 @@ class S3Parq:
     def __init__(self, **kwargs):
         self._set_kwargs_as_attrs(**kwargs)
 
-    def publish(self, partitions:iter=set())->None:
+    def publish(self, dataset:str=None, bucket:str=None, dataframe:pd.DataFrame=None, key_prefix:str=None, partitions:iter=None)->None:
+        ## this round-about setting of args gives IDEs back hinting and adds mechanical type checking. 
+        for attr, val in {"dataset":dataset, "bucket":bucket, "dataframe":dataframe, "partitions":partitions, "key_prefix":key_prefix}.items():
+            if val is not None:
+                self._set_kwargs_as_attrs({attr:val})
+
         required_attributes = ('dataset', 'bucket', 'dataframe',)
         self._check_required_attr(required_attributes)
 
-        publish = S3PublishParq(dataset=self.dataset,
-                                bucket=self.bucket,
-                                dataframe=self.dataframe,
-                                key_prefix=getattr(self,"key_prefix",''),
-                                partitions=partitions
-                                )
-        return publish.do_publish()
+        S3PublishParq(  dataset=self.dataset,
+                        bucket=self.bucket,
+                        dataframe=self.dataframe,
+                        key_prefix=getattr(self,"key_prefix",''),
+                        partitions=getattr(self,"partitions",[])
+                     )
 
-    def fetch(self)->None:
+    def fetch(self, dataset:str=None, bucket:str=None, filters:dict=None, key_prefix:str=None)->None:
+        ## this round-about setting of args gives IDEs back hinting and adds mechanical type checking. 
+        for attr, val in {"dataset":dataset, "bucket":bucket, "filters":filters, "key_prefix":key_prefix}.items():
+            if val is not None:
+                self._set_kwargs_as_attrs({attr:val})
+    
         required_attributes = ('dataset', 'bucket',)
         self._check_required_attr(required_attributes)
-        # DO fetch here
-
+        '''
+        s3FetchParq(dataset=self.dataset,
+                    bucket=self.bucket,
+                    filters=getattr(self,"filters",dict()),
+                    key_prefix=getattr(self,"key_prefix",'')
+                    )
+        '''
     @property
     def dataset(self)->str:
         return self._dataset
