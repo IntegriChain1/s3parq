@@ -3,7 +3,7 @@ from mock import patch
 import pandas as pd
 from moto import mock_s3
 from dfmock import DFMock
-from s3_parq.publish_parq import S3PublishParq 
+import s3_parq.publish_parq as pub_parq  
 from .mock_helper import MockHelper
 
 @mock_s3
@@ -18,7 +18,7 @@ class Test:
         'dataframe' : df,
         'partitions':[]
         }
-        return S3PublishParq(   bucket=overrides.get('bucket',defaults['bucket']),
+        return pub_parq.S3PublishParq(   bucket=overrides.get('bucket',defaults['bucket']),
                                 dataset=overrides.get('dataset',defaults['dataset']),
                                 key_prefix=overrides.get('key_prefix',defaults['key_prefix']),
                                 dataframe=overrides.get('dataframe',defaults['dataframe']),
@@ -41,19 +41,21 @@ class Test:
         partitions += ('banana')
         with pytest.raises(ValueError):
             self.publish_parq_setup(overrides={"dataframe":df.dataframe, "partitions":partitions})
-    '''
+    
     # generates partitions in order
-    @patch('s3_parq.publish_parq.pyarrow.parquet', autospec=True)
-    def test_generates_partitions_in_order(self,mock_parquet):
-        parq = self.parq_setup_exclude([])
-        partitions = parq.dataframe.columns[:1]
-        arg, kwarg = mock_parquet.write_to_dataset.call_args
-        assert kwarg['partition_cols'] == partitions
-    '''
-# - TODO: patch pyarrow here to make sure it is called - that's it.
-# generates parquet filesystem hierarchy correctly
-
+    
+    def test_generates_partitions_in_order(self):
+        df = DFMock(count=100)
+        df.columns = {"text_col":"string","int_cal":"integer","float_col":"float"}
+        df.generate_dataframe()
+        partitions = df.dataframe.columns[:1].tolist()
+        with patch('s3_parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
+            parq = self.publish_parq_setup(overrides={"dataframe":df.dataframe, "partitions":partitions}) 
+            arg, kwarg = mock_method.call_args
+            assert kwarg['partition_cols'] == partitions
+    
 # generates files of compressed size <=60mb
+## TODO: this needs to happen in pyarrow actually. :(
 
 # generates valid parquet files
 

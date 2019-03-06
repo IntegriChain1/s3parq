@@ -80,7 +80,7 @@ class S3FetchParq():
     def filters(self):
         return self._filters
 
-    @filters.setter:
+    @filters.setter
     def filters(self, filters: List(self.Filter)):
         if any(f["comparison"] not in ops for f in filters):
             raise ValueError("Filter comparison must be one of:  >, <, ==, !=")
