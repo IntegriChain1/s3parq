@@ -57,9 +57,9 @@ class Test:
             arg, kwarg = mock_method.call_args
             assert kwarg['partition_cols'] == partitions
     
-    # generates valid parquet files
-    @mock_s3
-    def test_generates_valid_parquet_files(self):
+    def publish_mock(self):
+        """ test setup where we do not want s3 records.
+            Returns the s3 path components to the dataset."""
         bucket = MockHelper().random_name()
         dataset = MockHelper().random_name()
         
@@ -69,22 +69,39 @@ class Test:
         df = DFMock(count=100)
         df.columns={"int_col":"int","str_col":"string","grouped_col":{"option_count":4,"option_type":"string"}}
         df.generate_dataframe()
+
         parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], key_prefix='')
-        
-        ## publish pushes directly to s3, so need to pull them down to inspect
+        return tuple([bucket,dataset,df.dataframe])
+    
+    # generates valid parquet files identical to source df
+    @mock_s3
+    def test_generates_valid_parquet_files(self):
+
+        bucket, dataset, dataframe = self.publish_mock()
         s3_path = f"s3://{bucket}/{dataset}"
         from_s3 = pq.ParquetDataset(s3_path, filesystem=s3fs.S3FileSystem())
         s3pd = from_s3.read().to_pandas()
-        pre_df = df.dataframe
+        pre_df = dataframe
         assert set(zip(s3pd.int_col,s3pd.str_col, s3pd.grouped_col)) - set(zip(pre_df.int_col, pre_df.str_col, pre_df.grouped_col)) == set()
 
-# correctly sets s3 metadata
+    # generates single partition path files of compressed size ~60mb
+    def test_parquet_sizes(self):
+        bucket = MockHelper().random_name()
+        dataset = MockHelper().random_name()
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket=bucket)
+        df = DFMock(count=1000000)
+        df.columns={"int_col":"int","str_col":"string","grouped_col":{"option_count":4,"option_type":"string"}}
+        df.generate_dataframe()
+        #df.grow_dataframe_to_size(120)
+        parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], key_prefix='')
 
-# respects source df schema exactly
+        for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
+            if obj['Key'].endswith(".parquet"):
+                assert float(obj['Size']) <= 61 * float(1<<20)
+        
+    # correctly sets s3 metadata
 
-# data in == data out
+    # spectrum register schema
 
-# spectrum register schema
-
-# generates files of compressed size <=60mb
-## TODO: this needs to happen in pyarrow actually. :(
+    
