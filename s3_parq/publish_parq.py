@@ -38,38 +38,32 @@ class S3PublishParq:
             else:
                 return str(round(num_bytes/float(1<<20),2)) +"MB"
 
-        sized_frames = []
         ## get first row size
-        row_size_est = sys.getsizeof(dataframe.head)
+        row_size_est = sys.getsizeof(dataframe.head(1))
         ## get number of rows
-        num_rows = dataframe.size()
+        num_rows = int(dataframe.size.item())
+        frame_size_est = row_size_est * num_rows
         ##TODO: need the compression ratio from dataframe to parquet
-        compression_ratio = raise ValueError("you gotta get compression ratio!")
+        compression_ratio = 4
+        ## 60MB compressed is ideal for Spectrum
+        ideal_size = compression_ratio * (60*float(1<<20))
+        ## short circut if < ideal size
+        if ideal_size > frame_size_est:
+            return tuple([dataframe])
+        
         ## math the number of estimated partitions 
-        num_partitions = floor(row_size*num_rows / (compression_ratio * (60*float(1<<20))))
+        sized_frames = []
+        num_partitions = int(row_size_est * num_rows / ideal_size )
+        rows_per_partition = int(num_rows / num_partitions)
         ## for each partition do the thing
-        
-        ## do the leftovers 
-        
-        #temp_df = pd.DataFrame()
-        for row in dataframe.itertuples(index=False):
-            num_bytes = sys.getsizeof(temp_list)  
-            ## the parquet files come out around 3.9 times the size of the same data in a list of tuples. This
-            if 1<<20 % num_bytes== 0:
-                self.logger.info(f"Tuple size == {log_size_estimate(num_bytes)}")
-            if num_bytes < (60*4)*float(1<<20):
-                temp_list.append(row)
-                #temp_df = pd.concat([temp_df, pd.DataFrame.from_records([row], columns=row._fields)])
+        for index, lower in enumerate(range(0,num_rows,rows_per_partition)):
+            lower = lower if lower == 0 else lower + 1
+            if index + 1  == num_partitions:
+                upper = num_rows
             else:
-                self.logger.info(f"Created dataframe of size {log_size_estimate(num_bytes)}")
-                sized_frames.append(pd.DataFrame.from_records(temp_list, columns=temp_list[0]._fields))
-                temp_list = []
-                #temp_df = pd.DataFrame()
-        
-        ## get the leftover frame
-        if len(temp_list) > 0:
-            self.logger.info(f"Created final dataframe of size {log_size_estimate(num_bytes)}")
-            sized_frames.append(pd.DataFrame.from_records(temp_list, columns=temp_list[0]._fields))
+                upper = lower + rows_per_partition
+            sized_frames.append(dataframe[lower:upper])    
+    
         return tuple(sized_frames)
 
     def _gen_parquet_to_s3(self, dataset:str, bucket:str, dataframe:pd.DataFrame, key_prefix:str, partitions:list)->None:

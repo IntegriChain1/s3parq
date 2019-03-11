@@ -4,11 +4,11 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import boto3
-from moto import mock_s3
 from dfmock import DFMock
 import s3_parq.publish_parq as pub_parq  
 from .mock_helper import MockHelper
 import s3fs
+from moto import mock_s3
 
 @mock_s3
 class Test:
@@ -28,7 +28,7 @@ class Test:
                                 dataframe=overrides.get('dataframe',defaults['dataframe']),
                                 partitions=overrides.get('partitions',defaults['partitions'])
                             )
-# accepts valid column names as partitions
+    # accepts valid column names as partitions
     def test_accepts_valid_partitions(self):
         df = DFMock(count=100)
         df.columns = {"text_col":"string","int_cal":"integer","float_col":"float"}
@@ -85,6 +85,7 @@ class Test:
         assert set(zip(s3pd.int_col,s3pd.str_col, s3pd.grouped_col)) - set(zip(pre_df.int_col, pre_df.str_col, pre_df.grouped_col)) == set()
 
     # generates single partition path files of compressed size ~60mb
+   
     def test_parquet_sizes(self):
         bucket = MockHelper().random_name()
         dataset = MockHelper().random_name()
