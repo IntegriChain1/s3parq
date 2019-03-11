@@ -20,7 +20,7 @@ class S3PublishParq:
                 raise ValueError(f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe.")
         for frame in self._sized_dataframes(dataframe):
             self._gen_parquet_to_s3(dataset=dataset, bucket=bucket,dataframe=frame, key_prefix=key_prefix, partitions=partitions)
-            
+            self._assign_partition_meta(bucket=bucket, dataset=dataset)   
 
     def _check_partition_compatibility(self):
         """ Make sure each partition value is hive-allowed."""
@@ -71,4 +71,24 @@ class S3PublishParq:
         table = pa.Table.from_pandas(dataframe, preserve_index=False)
         uri = '/'.join(["s3:/",bucket,dataset])
         pq.write_to_dataset(table, compression = "snappy", root_path = uri, partition_cols=partitions, filesystem=s3fs.S3FileSystem())
+        
 
+
+    def _assign_partition_meta(self, bucket:str, dataset:str)->None:
+        """ assigns the dataset partition meta to all keys in the dataset"""
+        s3_client = boto3.client('s3')
+        all_files = []
+        for obj in s3_client.list_objects(Bucket=bucket, Prefix=dataset)['Contents']:
+            if obj['Key'].endswith(".parquet"):
+                all_files.append(obj['Key'])
+                
+        for obj in all_files:
+            self.logger.info(f"Appending metadata to file {obj}")
+            s3_client.copy_object(Bucket=bucket, CopySource={'Bucket':bucket, 'Key':obj}, Key=obj, Metadata = {'partition_data_types':str(
+                       {"string_col":"string",
+                        "int_col":"integer",
+                        "float_col":"float",
+                        "bool_col":"boolean",
+                        "datetime_col":"datetime"
+                        })}, MetadataDirective='REPLACE')
+            

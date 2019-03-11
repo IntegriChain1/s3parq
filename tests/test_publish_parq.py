@@ -14,9 +14,11 @@ from moto import mock_s3
 class Test:
 
     def publish_parq_setup(self, overrides:dict=dict()):
-        df = MockHelper(count=100).dataframe 
+        mocker = MockHelper(count=100, s3=True)
+        df = mocker.dataframe
+        bucket = mocker.s3_bucket 
         defaults ={
-        'bucket':'safebucketname',
+        'bucket': bucket,
         'dataset' : 'safedatasetname',
         'key_prefix' : 'safekeyprefixname',
         'dataframe' : df,
@@ -52,13 +54,14 @@ class Test:
         df.columns = {"text_col":"string","int_cal":"integer","float_col":"float"}
         df.generate_dataframe()
         partitions = df.dataframe.columns[:1].tolist()
-        with patch('s3_parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
-            parq = self.publish_parq_setup(overrides={"dataframe":df.dataframe, "partitions":partitions}) 
-            arg, kwarg = mock_method.call_args
-            assert kwarg['partition_cols'] == partitions
+        with patch('s3_parq.publish_parq.boto3',return_value=True) as mock_downstream_method:
+            with patch('s3_parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
+                parq = self.publish_parq_setup(overrides={"dataframe":df.dataframe, "partitions":partitions}) 
+                arg, kwarg = mock_method.call_args
+                assert kwarg['partition_cols'] == partitions
     
     def publish_mock(self):
-        """ test setup where we do not want s3 records.
+        """ test setup whefre we do not want s3 records.
             Returns the s3 path components to the dataset."""
         bucket = MockHelper().random_name()
         dataset = MockHelper().random_name()
@@ -72,9 +75,24 @@ class Test:
 
         parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], key_prefix='')
         return tuple([bucket,dataset,df.dataframe])
+        
+    # correctly sets s3 metadata
+    def test_metadata(self):
+        bucket, dataset, dataframe = self.publish_mock()
+        s3_client = boto3.client('s3')
+        for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
+            if obj['Key'].endswith(".parquet"):
+                meta = s3_client.get_object(
+                    Bucket=bucket, Key=obj['Key'])['Metadata']
+                assert meta['partition_data_types'] == str(
+                       {"string_col":"string",
+                        "int_col":"integer",
+                        "float_col":"float",
+                        "bool_col":"boolean",
+                        "datetime_col":"datetime"
+                        })
     
     # generates valid parquet files identical to source df
-    @mock_s3
     def test_generates_valid_parquet_files(self):
 
         bucket, dataset, dataframe = self.publish_mock()
@@ -100,9 +118,6 @@ class Test:
         for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
             if obj['Key'].endswith(".parquet"):
                 assert float(obj['Size']) <= 61 * float(1<<20)
-        
-    # correctly sets s3 metadata
 
-    # spectrum register schema
 
     
