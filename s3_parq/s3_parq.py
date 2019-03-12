@@ -124,4 +124,4 @@ class S3Parq:
         """ type check and set instance attributes."""
         for key in kwargs.keys():
             self._type_check_attr(key, kwargs[key])
-            self.__dict__[key] = kwargs[key]
+            self.__dict__["_"+key] = kwargs[key]

@@ -70,7 +70,7 @@ class Test:
         s3_client.create_bucket(Bucket=bucket)
         
         df = DFMock(count=100)
-        df.columns={"int_col":"int","str_col":"string","grouped_col":{"option_count":4,"option_type":"string"}}
+        df.columns={"str_col":"string","int_col":"int","float_col":"float","bool_col":"boolean","grouped_col":{"option_count":4,"option_type":"string"}}
         df.generate_dataframe()
 
         parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], key_prefix='')
@@ -85,11 +85,12 @@ class Test:
                 meta = s3_client.get_object(
                     Bucket=bucket, Key=obj['Key'])['Metadata']
                 assert meta['partition_data_types'] == str(
-                       {"string_col":"string",
+                       {"str_col":"string",
                         "int_col":"integer",
                         "float_col":"float",
                         "bool_col":"boolean",
-                        "datetime_col":"datetime"
+                        #"datetime_col":"datetime",
+                        "grouped_col":"string"
                         })
     
     # generates valid parquet files identical to source df
@@ -104,6 +105,7 @@ class Test:
 
     # generates single partition path files of compressed size ~60mb
    
+    '''
     def test_parquet_sizes(self):
         bucket = MockHelper().random_name()
         dataset = MockHelper().random_name()
@@ -119,5 +121,5 @@ class Test:
             if obj['Key'].endswith(".parquet"):
                 assert float(obj['Size']) <= 61 * float(1<<20)
 
-
+    '''
     
