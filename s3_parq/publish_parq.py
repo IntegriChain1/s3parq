@@ -16,19 +16,28 @@ class S3PublishParq:
                  key_prefix: str,
                  partitions: iter)->None:
         self.logger = logging.getLogger(__name__)
+
         for partition in partitions:
             if partition not in dataframe.columns.tolist():
-                raise ValueError(
-                    f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe.")
+                partition_message = f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe."
+                self.logger.critical(partition_message)
+                raise ValueError(partition_message)
+            if not self._check_partition_compatibility(partition):
+                partition_message = f"{partition} is a reserved word in hive that cannot be used as a partition."
+                self.logger.critical(partition_message)
+                raise ValueError(partition_message)
+
         for frame in self._sized_dataframes(dataframe):
             self._gen_parquet_to_s3(dataset=dataset, bucket=bucket,
                                     dataframe=frame, key_prefix=key_prefix, partitions=partitions)
             self._assign_partition_meta(bucket=bucket, dataset=dataset, dataframe=frame)
 
-    def _check_partition_compatibility(self):
+    def _check_partition_compatibility(self, partition:str)->bool:
         """ Make sure each partition value is hive-allowed."""
-        pass
+        reserved = "ALL, ALTER, AND, ARRAY, AS, AUTHORIZATION, BETWEEN, BIGINT, BINARY, BOOLEAN, BOTH, BY, CASE, CAST, CHAR, COLUMN, CONF, CREATE, CROSS, CUBE, CURRENT, CURRENT_DATE, CURRENT_TIMESTAMP, CURSOR, DATABASE, DATE, DECIMAL, DELETE, DESCRIBE, DISTINCT, DOUBLE, DROP, ELSE, END, EXCHANGE, EXISTS, EXTENDED, EXTERNAL, FALSE, FETCH, FLOAT, FOLLOWING, FOR, FROM, FULL, FUNCTION, GRANT, GROUP, GROUPING, HAVING, IF, IMPORT, IN, INNER, INSERT, INT, INTERSECT, INTERVAL, INTO, IS, JOIN, LATERAL, LEFT, LESS, LIKE, LOCAL, MACRO, MAP, MORE, NONE, NOT, NULL, OF, ON, OR, ORDER, OUT, OUTER, OVER, PARTIALSCAN, PARTITION, PERCENT, PRECEDING, PRESERVE, PROCEDURE, RANGE, READS, REDUCE, REVOKE, RIGHT, ROLLUP, ROW, ROWS, SELECT, SET, SMALLINT, TABLE, TABLESAMPLE, THEN, TIMESTAMP, TO, TRANSFORM, TRIGGER, TRUE, TRUNCATE, UNBOUNDED, UNION, UNIQUEJOIN, UPDATE, USER, USING, UTC_TMESTAMP, VALUES, VARCHAR, WHEN, WHERE, WINDOW, WITH, COMMIT, ONLY, REGEXP, RLIKE, ROLLBACK, START, CACHE, CONSTRAINT, FOREIGN, PRIMARY, REFERENCES, DAYOFWEEK, EXTRACT, FLOOR, INTEGER, PRECISION, VIEWS, TIME, NUMERIC, SYNC".split()
 
+        return not partition.upper() in reserved
+            
     def _sized_dataframes(self, dataframe: pd.DataFrame)->tuple:
         """Takes a dataframe and slices it into ~100mb dataframes for optimal parquet sizes in S3.
             RETURNS a tuple of dataframes.         

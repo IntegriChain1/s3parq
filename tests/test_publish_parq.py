@@ -35,11 +35,21 @@ class Test:
         df = DFMock(count=100)
         df.columns = {"text_col":"string","int_cal":"integer","float_col":"float"}
         df.generate_dataframe()
-        partitions = df.columns[:1]
+        partitions = df.dataframe.columns[:1]
         self.publish_parq_setup(overrides={"dataframe":df.dataframe, "partitions":partitions})
 
     # only accepts valid column names as partitions
-    def test_accepts_valid_partitions(self):
+    def test_rejects_protected_partitions(self):
+        df = DFMock(count=100)
+        df.columns = {"text_col":"string","int_cal":"integer","float_col":"float"}
+        df.generate_dataframe()
+        partitions = df.dataframe.columns[:1]
+        partitions += ('extract')
+        with pytest.raises(ValueError):
+            self.publish_parq_setup(overrides={"dataframe":df.dataframe, "partitions":partitions})
+
+    # only accepts valid column names as partitions
+    def test_only_accepts_valid_partitions(self):
         df = DFMock(count=100)
         df.columns = {"text_col":"string","int_cal":"integer","float_col":"float"}
         df.generate_dataframe()
