@@ -103,23 +103,5 @@ class Test:
         pre_df = dataframe
         assert set(zip(s3pd.int_col,s3pd.str_col, s3pd.grouped_col)) - set(zip(pre_df.int_col, pre_df.str_col, pre_df.grouped_col)) == set()
 
-    # generates single partition path files of compressed size ~60mb
    
-    '''
-    def test_parquet_sizes(self):
-        bucket = MockHelper().random_name()
-        dataset = MockHelper().random_name()
-        s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket=bucket)
-        df = DFMock(count=1000000)
-        df.columns={"int_col":"int","str_col":"string","grouped_col":{"option_count":4,"option_type":"string"}}
-        df.generate_dataframe()
-        #df.grow_dataframe_to_size(120)
-        parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], key_prefix='')
-
-        for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
-            if obj['Key'].endswith(".parquet"):
-                assert float(obj['Size']) <= 61 * float(1<<20)
-
-    '''
     
