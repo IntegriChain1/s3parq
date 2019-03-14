@@ -1,24 +1,28 @@
 import pytest
 from mock import patch
 import pandas as pd
-from moto import mock_s3
 from dfmock import DFMock
 from s3_parq import S3Parq
 from s3_parq.publish_parq import S3PublishParq 
-from .mock_helper import MockHelper
+import boto3
+from moto import mock_s3
 
 @mock_s3
 class Test:
 
     strings = ("bucket","dataset","key_prefix",)
     def parq_setup_exclude(self, to_exclude):
-        df = MockHelper(count=100).dataframe 
+        s3_client= boto3.client('s3')
+        s3_client.create_bucket(Bucket = 'safebucketname')
+        df = DFMock(count=100)
+        df.columns = {"stringer":"string","intcol":"int","groupcol":{"option_count":5,"option_type":"string"}}
+        df.generate_dataframe()
         defaults ={
         'bucket':'safebucketname',
         'dataset' : 'safedatasetname',
         'key_prefix' : 'safekeyprefixname',
         'filters' :{"filtered_thing":"filter_val"},
-        'dataframe' : df
+        'dataframe' : df.dataframe
         }
         parq = S3Parq()
         for a in defaults.keys():
@@ -51,11 +55,6 @@ class Test:
         parq = S3Parq()
         with pytest.raises(NotImplementedError):
             parq.dataframe = df.dataframe
-
-    # accepts good string
-    def test_accepts_valid_dataframe(self):
-        parq = self.parq_setup_exclude([])
-        parq.publish()
 
     # requires string
     def test_requires_string(self):
