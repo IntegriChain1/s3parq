@@ -1,5 +1,7 @@
 import boto3
 import operator
+import multiprocessing as mp
+import s3fs
 
 from s3_naming_helper import S3NamingHelper
 
@@ -54,7 +56,7 @@ class S3FetchParq():
     '''
 
     def __init__(self, bucket:str, prefix: str, filters: List(self.Filter)) -> None:
-        pass
+        self._s3fs = s3fs    
 
     @property
     def s3_bucket(self) -> str:
@@ -112,10 +114,16 @@ class S3FetchParq():
         '''
         pass
 
-    def _get_filtered_files(self):
-        ''' Pull all filtered parquets down to local temp directory.
+    def _get_filtered_data(self, bucket:str, paths:list)->pd.DataFrame:
+        ''' Pull all filtered parquets down and return a dataframe.
         '''
-        pass
+        temp_frames = []
+        threads = [mp.Process() for path in paths]
+        
+    def _s3_parquet_to_dataframe(self, key:str, file_system, destination:list)->None:
+        """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
+        table = pq.read_table(key, filesystem= file_system)
+        destination.append(table.to_pandas())
 
     def _turn_files_into_dataframes(self):
         ''' Turn the local files into pandas dataframes.

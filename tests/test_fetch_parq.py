@@ -130,7 +130,11 @@ class Test():
     def test_single_path_fetch(self):
         mock = MockHelper(count=500)
         
-        fetch = FetchParq(bucket=mock.bucket, prefix=    
+        fetch = FetchParq(bucket=mock.bucket, prefix=mock.dataset, filters={})
+        
+        response_frame = fetch._get_from_s3(bucket=mock.bucket, paths = [mock.paths[0]])
+
+           
 
     
     
