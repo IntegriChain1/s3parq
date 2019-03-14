@@ -2,7 +2,7 @@ import pytest
 import pandas
 import boto3
 import moto
-
+from .mock_helper import MockHelper
 
 class Test():
 
@@ -119,6 +119,31 @@ class Test():
         - Transforms the files into dataframes
         - Concatenates the dataframes and returns them
     '''
+
+    ## setup for Phase 3
+    def phase_3_setup(self):
+        
+
+
+
+    ## captures from a single parquet path dataset
+    def test_single_path_fetch(self):
+        mock = MockHelper(count=500)
+      
+        fetch = FetchParq(bucket=mock.bucket, prefix=    
+
+    
+    
+    ## captures from multiple paths in dataset
+
+    
+    ## borks when different datasets
+
+
+    ## borks when not found
+
+
+
 
     # Test pulling down a parquet file
     def test_fetch_parquet_file(self):

@@ -20,9 +20,18 @@ class MockHelper:
     def __init__(self, count=1000000, s3=False):
         """ If s3 then will populate the s3 bucket with partitioned parquet. """
         self._dataframe = self.setup_grouped_dataframe(count=count)
+        self._paths = []
         if s3:
             self._s3_bucket = self.setup_partitioned_parquet()
+
         
+    @property
+    def paths(self):
+        return self._paths
+
+    @property
+    def dataset(self):
+        return self._dataset
 
     @property
     def dataframe(self):
@@ -62,7 +71,6 @@ class MockHelper:
                             partition_cols = ['string_col','int_col','float_col','bool_col','datetime_col'])
 
         ## traverse the local parquet tree
-        paths = ''
         extra_args = {'partition_data_types': str(
                        {"string_col":"string",
                         "int_col":"integer",
@@ -74,6 +82,7 @@ class MockHelper:
             for file in files:
                 full_path = os.path.join(subdir, file)
                 with open(full_path, 'rb') as data:
-                    path = full_path[1:]#[len(str(1))+1:]
+                    path = full_path[1:]
                     s3_client.upload_fileobj(data, Bucket=bucket_name,Key=path, ExtraArgs={"Metadata": extra_args})
+                    self._paths.append(path)
         return bucket_name
