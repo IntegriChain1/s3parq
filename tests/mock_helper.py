@@ -72,7 +72,7 @@ class MockHelper:
         pq.write_to_dataset(table, 
                             root_path=str(t),
                             partition_cols = ['string_col','int_col','float_col','bool_col','datetime_col'])
-
+        
         ## traverse the local parquet tree
         extra_args = {'partition_data_types': str(
                        {"string_col":"string",

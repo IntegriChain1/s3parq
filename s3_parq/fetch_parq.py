@@ -117,19 +117,31 @@ class S3FetchParq:
         '''
         pass
 
-    def _get_filtered_data(self, bucket:str, paths:list)->pd.DataFrame:
+    def _get_filtered_data(self, bucket:str, prefix:str, paths:list)->pd.DataFrame:
         ''' Pull all filtered parquets down and return a dataframe.
         '''
-        temp_frames = []
-        threads = [mp.Process() for path in paths]
+        temp_queue = mp.Queue()
         
+        threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(prefix,bucket,temp_queue,)) for path in paths]
+        for thread in threads:
+            thread.start()
+            thread.join()
+        
+        return temp_queue.get()    
+        temp_frames = [temp_queue.get() for x in range(len(paths))]
+        
+        return pd.concat(temp_queue.get())
+
+        
+
+
     def _s3_parquet_to_dataframe(self, prefix:str, bucket:str, destination:list)->None:
         """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
         s3 = s3fs.S3FileSystem()
         
-        uri = s3.glob(f"{bucket}/{prefix}")
+        uri = f"{bucket}/{prefix}"
         table = pq.ParquetDataset(uri, filesystem= s3)
-        destination.append(table.read_pandas().to_pandas())
+        destination.put(table.read_pandas().to_pandas())
 
     def _turn_files_into_dataframes(self):
         ''' Turn the local files into pandas dataframes.

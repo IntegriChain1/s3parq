@@ -1,4 +1,5 @@
 import pytest
+import multiprocessing as mp
 import pandas as pd
 import boto3
 import moto
@@ -127,14 +128,21 @@ class Test():
         mock = MockHelper(count=500, s3 = True)
         fetch = S3FetchParq(bucket=mock.s3_bucket, prefix=mock.dataset, filters={})
         
-        dest = []
+        dest = mp.Queue()
         fetch._s3_parquet_to_dataframe(bucket = mock.s3_bucket, prefix ='/'.join(mock.paths[0].split('/')[:-1]), destination = dest)
         
-        assert len(dest) == 1 
-        assert isinstance(dest[0],pd.DataFrame)    
+        resp = [dest.get()]
+        
+        assert len(resp) == 1 
+        assert isinstance(resp[0],pd.DataFrame)    
 
     ## captures from multiple paths in dataset
-
+        paths = set(['/'.join(mock.paths[x].split('/')[:-1]) for x in range(len(mock.paths))])
+        big_df = fetch._get_filtered_data(bucket = mock.s3_bucket, prefix=mock.dataset, paths = paths)
+        
+        assert isinstance(big_df, pd.DataFrame)
+        
+        assert mock.dataframe.shape == big_df.shape
     
     ## borks when different datasets
 
