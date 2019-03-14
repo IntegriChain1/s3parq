@@ -44,12 +44,12 @@ class MockHelper:
         df.generate_dataframe()
         return df.dataframe
     
-    def random_bucket_name(self):
+    def random_name(self):
         return ''.join([random.choice(ascii_lowercase) for x in range(0,10)])
     
 
     def setup_partitioned_parquet(self):
-        bucket_name = self.random_bucket_name()
+        bucket_name = self.random_name()
         t = tempfile.mkdtemp()
         s3_client = boto3.client('s3')
         df = self._dataframe
