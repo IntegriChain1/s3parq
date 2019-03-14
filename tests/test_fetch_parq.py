@@ -1,9 +1,11 @@
 import pytest
-import pandas
+import pandas as pd
 import boto3
 import moto
+from s3_parq.fetch_parq import S3FetchParq
 from .mock_helper import MockHelper
 
+@moto.mock_s3
 class Test():
 
     ''' Phase 1 tests:
@@ -120,24 +122,17 @@ class Test():
         - Concatenates the dataframes and returns them
     '''
 
-    ## setup for Phase 3
-    def phase_3_setup(self):
-        
-
-
-
     ## captures from a single parquet path dataset
-    def test_single_path_fetch(self):
-        mock = MockHelper(count=500)
+    def test_s3_parquet_to_dataframe(self):
+        mock = MockHelper(count=500, s3 = True)
+        fetch = S3FetchParq(bucket=mock.s3_bucket, prefix=mock.dataset, filters={})
         
-        fetch = FetchParq(bucket=mock.bucket, prefix=mock.dataset, filters={})
+        dest = []
+        fetch._s3_parquet_to_dataframe(bucket = mock.s3_bucket, prefix ='/'.join(mock.paths[0].split('/')[:-1]), destination = dest)
         
-        response_frame = fetch._get_from_s3(bucket=mock.bucket, paths = [mock.paths[0]])
+        assert len(dest) == 1 
+        assert isinstance(dest[0],pd.DataFrame)    
 
-           
-
-    
-    
     ## captures from multiple paths in dataset
 
     

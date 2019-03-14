@@ -1,11 +1,14 @@
+from typing import List
 import boto3
 import operator
 import multiprocessing as mp
 import s3fs
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+from .s3_naming_helper import S3NamingHelper
 
-from s3_naming_helper import S3NamingHelper
-
-class S3FetchParq():
+class S3FetchParq:
     ''' S3 Parquet to Dataframe Fetcher.
     This class handles the portion of work that will return a concatenated 
     dataframe based on the partition filters the specified dataset.
@@ -27,7 +30,7 @@ class S3FetchParq():
     Filter = {
         "partition": str,
         "comparison": str,
-        "values": List(any)
+        "values": List
     }
 
     ops = {
@@ -55,8 +58,8 @@ class S3FetchParq():
         Concat dataframes and return
     '''
 
-    def __init__(self, bucket:str, prefix: str, filters: List(self.Filter)) -> None:
-        self._s3fs = s3fs    
+    def __init__(self, bucket:str, prefix: str, filters: dict) -> None:
+        pass
 
     @property
     def s3_bucket(self) -> str:
@@ -83,7 +86,7 @@ class S3FetchParq():
         return self._filters
 
     @filters.setter
-    def filters(self, filters: List(self.Filter)):
+    def filters(self, filters: dict):
         if any(f["comparison"] not in ops for f in filters):
             raise ValueError("Filter comparison must be one of:  >, <, ==, !=")
 
@@ -120,10 +123,13 @@ class S3FetchParq():
         temp_frames = []
         threads = [mp.Process() for path in paths]
         
-    def _s3_parquet_to_dataframe(self, key:str, file_system, destination:list)->None:
+    def _s3_parquet_to_dataframe(self, prefix:str, bucket:str, destination:list)->None:
         """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
-        table = pq.read_table(key, filesystem= file_system)
-        destination.append(table.to_pandas())
+        s3 = s3fs.S3FileSystem()
+        
+        uri = s3.glob(f"{bucket}/{prefix}")
+        table = pq.ParquetDataset(uri, filesystem= s3)
+        destination.append(table.read_pandas().to_pandas())
 
     def _turn_files_into_dataframes(self):
         ''' Turn the local files into pandas dataframes.

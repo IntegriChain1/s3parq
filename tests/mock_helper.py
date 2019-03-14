@@ -20,6 +20,8 @@ class MockHelper:
     def __init__(self, count=1000000, s3=False):
         """ If s3 then will populate the s3 bucket with partitioned parquet. """
         self._dataframe = self.setup_grouped_dataframe(count=count)
+        self._s3_bucket = ''
+        self._dataset = ''
         self._paths = []
         if s3:
             self._s3_bucket = self.setup_partitioned_parquet()
@@ -59,6 +61,7 @@ class MockHelper:
 
     def setup_partitioned_parquet(self):
         bucket_name = self.random_name()
+        self._s3_bucket = bucket_name
         t = tempfile.mkdtemp()
         s3_client = boto3.client('s3')
         df = self._dataframe
