@@ -129,7 +129,7 @@ class Test():
     ## captures from a single parquet path dataset
     def test_single_path_fetch(self):
         mock = MockHelper(count=500)
-      
+        
         fetch = FetchParq(bucket=mock.bucket, prefix=    
 
     

@@ -81,8 +81,11 @@ class MockHelper:
         for subdir, dirs, files in os.walk(str(t)):
             for file in files:
                 full_path = os.path.join(subdir, file)
+                keysub = subdir.split(os.path.sep)[subdir.split(os.path.sep).index('T')+1:]
+                self._dataset = keysub[0] 
+                keysub.append(file)
+                key = '/'.join(keysub)
                 with open(full_path, 'rb') as data:
-                    path = full_path[1:]
-                    s3_client.upload_fileobj(data, Bucket=bucket_name,Key=path, ExtraArgs={"Metadata": extra_args})
-                    self._paths.append(path)
+                    s3_client.upload_fileobj(data, Bucket=bucket_name,Key=key, ExtraArgs={"Metadata": extra_args})
+                    self._paths.append(key)
         return bucket_name
