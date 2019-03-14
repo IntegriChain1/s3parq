@@ -126,48 +126,26 @@ class Test():
     ## captures from a single parquet path dataset
     def test_s3_parquet_to_dataframe(self):
         mock = MockHelper(count=500, s3 = True)
-        fetch = S3FetchParq(bucket=mock.s3_bucket, prefix=mock.dataset, filters={})
+        fetch = S3FetchParq(bucket='', prefix='', filters={})
         
         dest = mp.Queue()
-        fetch._s3_parquet_to_dataframe(bucket = mock.s3_bucket, prefix ='/'.join(mock.paths[0].split('/')[:-1]), destination = dest)
+        fetch._s3_parquet_to_dataframe(bucket = mock.s3_bucket, path = '/'.join(mock.paths[0].split('/')[:-1]), destination = dest)
         
         resp = [dest.get()]
         
         assert len(resp) == 1 
         assert isinstance(resp[0],pd.DataFrame)    
-
+        
+    
     ## captures from multiple paths in dataset
         paths = set(['/'.join(mock.paths[x].split('/')[:-1]) for x in range(len(mock.paths))])
-        big_df = fetch._get_filtered_data(bucket = mock.s3_bucket, prefix=mock.dataset, paths = paths)
+        big_df = fetch._get_filtered_data(bucket = mock.s3_bucket, paths = paths)
         
         assert isinstance(big_df, pd.DataFrame)
-        
+        assert set(mock.dataframe.columns) == set(big_df.columns)
         assert mock.dataframe.shape == big_df.shape
     
-    ## borks when different datasets
-
-
-    ## borks when not found
-
-
-
-
-    # Test pulling down a parquet file
-    def test_fetch_parquet_file(self):
-        pass
-
     # Test pulling down a list of parquet files
     def test_fetch_parquet_list(self):
         pass
 
-    # Test turning a parquet file into a pandas dataframe
-    def test_parquet_to_df(self):
-        pass
-
-    # Test concatenating pandas dataframes
-    def test_concat_dfs(self):
-        pass
-
-    # Test concatenating pandas dataframes when only one exists
-    def test_concat_dfs_one(self):
-        pass

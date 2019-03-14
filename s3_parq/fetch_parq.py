@@ -5,6 +5,7 @@ import multiprocessing as mp
 import s3fs
 import pandas as pd
 import pyarrow as pa
+import datetime
 import pyarrow.parquet as pq
 from .s3_naming_helper import S3NamingHelper
 
@@ -26,6 +27,14 @@ class S3FetchParq:
                     Values to compare to - must match partition data type
                     May not use multiple values with the '<', '>' comparisons
     '''
+
+    ## STUB! REMOVE ME!
+    _partition_metadata = {"string_col":"string",
+                        "int_col":"integer",
+                        "float_col":"float",
+                        "bool_col":"boolean",
+                        "datetime_col":"datetime"
+                        }
 
     Filter = {
         "partition": str,
@@ -117,42 +126,61 @@ class S3FetchParq:
         '''
         pass
 
-    def _get_filtered_data(self, bucket:str, prefix:str, paths:list)->pd.DataFrame:
+    def _get_filtered_data(self, bucket:str, paths:list)->pd.DataFrame:
         ''' Pull all filtered parquets down and return a dataframe.
         '''
         temp_queue = mp.Queue()
-        
-        threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(prefix,bucket,temp_queue,)) for path in paths]
+        temp_frames = []
+        threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(bucket, path, temp_queue,)) for path in paths]
         for thread in threads:
             thread.start()
+            temp_frames.append(temp_queue.get())
+           
+        for thread in threads:
             thread.join()
-        
-        return temp_queue.get()    
-        temp_frames = [temp_queue.get() for x in range(len(paths))]
-        
-        return pd.concat(temp_queue.get())
 
-        
+        return pd.concat(temp_frames)
 
 
-    def _s3_parquet_to_dataframe(self, prefix:str, bucket:str, destination:list)->None:
+    def _s3_parquet_to_dataframe(self, bucket:str, path:str, destination:list)->None:
         """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
         s3 = s3fs.S3FileSystem()
-        
-        uri = f"{bucket}/{prefix}"
+        uri = f"{bucket}/{path}"
         table = pq.ParquetDataset(uri, filesystem= s3)
-        destination.put(table.read_pandas().to_pandas())
+        frame = table.read_pandas().to_pandas()
+        partitions = self._repopulate_partitions(uri)
+        for k,v in partitions.items():
+            frame[k] = v
+        destination.put(frame)
 
-    def _turn_files_into_dataframes(self):
-        ''' Turn the local files into pandas dataframes.
-        TODO: Level of handling?
-        '''
-        pass
 
-    def _concat_dataframes(self):
-        ''' Concatenate dataframes from the local files to return.
-        '''
-        pass
+    def _repopulate_partitions(self,partition_string:str)->tuple:
+        """ for each val in the partition string creates a list that can be added back into the dataframe"""
+        raw = partition_string.split('/')
+        partitions = {}
+        for string in raw:
+            if '=' in string:
+                k,v = string.split('=')
+                partitions[k] = v
+
+        for key, val in partitions.items():
+            try:
+                dtype = self._partition_metadata[key] 
+            except:
+                raise ValueError(f"{key} is not a recognized partition in the current s3 meta.")
+            if dtype == 'string':
+                partitions[key] = str(val)    
+            elif dtype == 'integer':
+                partitions[key] = int(val)
+            elif dtype == 'float':
+                partitions[key] = float(val)
+            elif dtype == 'datetime':
+                partitions[key] = datetime.datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+            elif dtype == 'category':
+                partitions[key] = pd.Category(val)
+            elif dtype == 'bool':
+                partitions[key] = bool(val)
+        return partitions
 
     def _validate_matching_filter_data_type(self):
         ''' Validate that the filters passed are matching to the partitions'
