@@ -1,15 +1,17 @@
 import pytest
 import pandas as pd
+import multiprocessing as mp
+import moto
 import boto3
 from mock import patch
-from moto import mock_s3
 from dfmock import DFMock
 from collections import OrderedDict
 
 from .mock_helper import MockHelper
 from s3_parq.fetch_parq import S3FetchParq
 
-@mock_s3
+
+@moto.mock_s3
 class Test():
 
     # TODO: refactor to use MockHelper in places for more complete coverage
@@ -429,24 +431,29 @@ class Test():
         - Concatenates the dataframes and returns them
     '''
 
-    # Test pulling down a parquet file
-    def test_fetch_parquet_file(self):
-        pass
-
+    ## captures from a single parquet path dataset
+    def test_s3_parquet_to_dataframe(self):
+        mock = MockHelper(count=500, s3 = True)
+        fetch = S3FetchParq(bucket=mock.s3_bucket, prefix='', dataset='', filters={})
+        
+        dest = mp.Queue()
+        fetch._s3_parquet_to_dataframe(bucket = mock.s3_bucket, path = '/'.join(mock.paths[0].split('/')[:-1]), destination = dest)
+        
+        resp = [dest.get()]
+        
+        assert len(resp) == 1 
+        assert isinstance(resp[0],pd.DataFrame)    
+        
+    
+    ## captures from multiple paths in dataset
+        paths = set(['/'.join(mock.paths[x].split('/')[:-1]) for x in range(len(mock.paths))])
+        big_df = fetch._get_filtered_data(bucket = mock.s3_bucket, paths = paths)
+        
+        assert isinstance(big_df, pd.DataFrame)
+        assert set(mock.dataframe.columns) == set(big_df.columns)
+        assert mock.dataframe.shape == big_df.shape
+    
     # Test pulling down a list of parquet files
     def test_fetch_parquet_list(self):
         pass
 
-    # Test turning a parquet file into a pandas dataframe
-    def test_parquet_to_df(self):
-        pass
-
-    # Test concatenating pandas dataframes
-    def test_concat_dfs(self):
-        pass
-
-    # Test concatenating pandas dataframes when only one exists
-    def test_concat_dfs_one(self):
-        pass
-        
-    #TODO: See where pyarrow will be called : mock it out, simplify tests

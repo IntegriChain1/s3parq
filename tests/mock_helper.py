@@ -21,11 +21,21 @@ class MockHelper:
     def __init__(self, count=1000000, s3=False, files=False):
         """ If s3 then will populate the s3 bucket with partitioned parquet. """
         self._dataframe = self.setup_grouped_dataframe(count=count)
+        self._s3_bucket = ''
+        self._dataset = ''
+        self._paths = []
         if s3:
             self._s3_bucket = self.setup_partitioned_parquet()
         if files:
             self._file_ops = self.setup_files_list(count, prefix="lotsa/files/")
         
+    @property
+    def paths(self):
+        return self._paths
+
+    @property
+    def dataset(self):
+        return self._dataset
 
     @property
     def dataframe(self):
@@ -59,6 +69,8 @@ class MockHelper:
         bucket_name = self.random_name()
         t = tempfile.mkdtemp() 
         self.tmpdir = t
+        self._s3_bucket = bucket_name
+        
         s3_client = boto3.client('s3')
         df = self._dataframe
         s3_client.create_bucket(Bucket=bucket_name)
@@ -68,9 +80,8 @@ class MockHelper:
         pq.write_to_dataset(table, 
                             root_path=str(t),
                             partition_cols = ['string_col','int_col','float_col','bool_col','datetime_col'])
-
+        
         ## traverse the local parquet tree
-        paths = ''
         extra_args = {'partition_data_types': str(
                        {"string_col":"string",
                         "int_col":"integer",
@@ -81,9 +92,13 @@ class MockHelper:
         for subdir, dirs, files in os.walk(str(t)):
             for file in files:
                 full_path = os.path.join(subdir, file)
+                keysub = subdir.split(os.path.sep)[subdir.split(os.path.sep).index('T')+1:]
+                self._dataset = keysub[0] 
+                keysub.append(file)
+                key = '/'.join(keysub)
                 with open(full_path, 'rb') as data:
-                    path = full_path[1:]#[len(str(1))+1:]
-                    s3_client.upload_fileobj(data, Bucket=bucket_name,Key=path, ExtraArgs={"Metadata": extra_args})
+                    s3_client.upload_fileobj(data, Bucket=bucket_name,Key=key, ExtraArgs={"Metadata": extra_args})
+                    self._paths.append(key)
         return bucket_name
 
     def setup_files_list(self, count=1500, prefix="lotsa/files/"):

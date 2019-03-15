@@ -1,13 +1,17 @@
 import ast
 import boto3
+from collections import OrderedDict
+import datetime
 import operator
 from typing import List
-from collections import OrderedDict
-
+import multiprocessing as mp
+import s3fs
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from .s3_naming_helper import S3NamingHelper
 
-
-class S3FetchParq():
+class S3FetchParq:
     ''' S3 Parquet to Dataframe Fetcher.
     This class handles the portion of work that will return a concatenated 
     dataframe based on the partition filters the specified dataset.
@@ -27,6 +31,14 @@ class S3FetchParq():
                     May not use multiple values with the '<', '>' comparisons
     '''
     # TODO: Future add-ons : get max value of partition
+
+    ## STUB! REMOVE ME!
+    _partition_metadata = {"string_col":"string",
+                        "int_col":"integer",
+                        "float_col":"float",
+                        "bool_col":"boolean",
+                        "datetime_col":"datetime"
+                        }
 
     Filter = {
         "partition": str,
@@ -77,7 +89,7 @@ class S3FetchParq():
         if validater[0]:
             self._bucket = bucket
         else:
-            raise ValueError(val[1])
+            raise ValueError(validater[1])
 
     @property
     def s3_prefix(self) -> str:
@@ -93,10 +105,6 @@ class S3FetchParq():
 
     @filters.setter
     def filters(self, filters: List[type(Filter)]):
-        # if any(f["comparison"] not in ops for f in filters):
-        #     raise ValueError(
-        #         "Filter comparison must be one of:  >, >=, <, <=, ==, !="
-        #     )
         self._validate_filter_rules(filters)
 
         self._filters = filters
@@ -226,21 +234,61 @@ class S3FetchParq():
         #TODO: fix the below mess with random array
         return filter_keys[0]
 
-    def _get_filtered_files(self):
-        ''' Pull all filtered parquets down to local temp directory.
+    def _get_filtered_data(self, bucket:str, paths:list)->pd.DataFrame:
+        ''' Pull all filtered parquets down and return a dataframe.
         '''
-        pass
+        temp_queue = mp.Queue()
+        temp_frames = []
+        threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(bucket, path, temp_queue,)) for path in paths]
+        for thread in threads:
+            thread.start()
+            temp_frames.append(temp_queue.get())
+           
+        for thread in threads:
+            thread.join()
 
-    def _turn_files_into_dataframes(self):
-        ''' Turn the local files into pandas dataframes.
-        TODO: Level of handling?
-        '''
-        pass
+        return pd.concat(temp_frames)
 
-    def _concat_dataframes(self):
-        ''' Concatenate dataframes from the local files to return.
-        '''
-        pass
+
+    def _s3_parquet_to_dataframe(self, bucket:str, path:str, destination:list)->None:
+        """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
+        s3 = s3fs.S3FileSystem()
+        uri = f"{bucket}/{path}"
+        table = pq.ParquetDataset(uri, filesystem= s3)
+        frame = table.read_pandas().to_pandas()
+        partitions = self._repopulate_partitions(uri)
+        for k,v in partitions.items():
+            frame[k] = v
+        destination.put(frame)
+
+
+    def _repopulate_partitions(self,partition_string:str)->tuple:
+        """ for each val in the partition string creates a list that can be added back into the dataframe"""
+        raw = partition_string.split('/')
+        partitions = {}
+        for string in raw:
+            if '=' in string:
+                k,v = string.split('=')
+                partitions[k] = v
+
+        for key, val in partitions.items():
+            try:
+                dtype = self._partition_metadata[key] 
+            except:
+                raise ValueError(f"{key} is not a recognized partition in the current s3 meta.")
+            if dtype == 'string':
+                partitions[key] = str(val)    
+            elif dtype == 'integer':
+                partitions[key] = int(val)
+            elif dtype == 'float':
+                partitions[key] = float(val)
+            elif dtype == 'datetime':
+                partitions[key] = datetime.datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+            elif dtype == 'category':
+                partitions[key] = pd.Category(val)
+            elif dtype == 'bool':
+                partitions[key] = bool(val)
+        return partitions
 
     def _validate_filter_rules(self, filters: List[type(Filter)]):
         ''' Validate that the filters are the correct format and follow basic
