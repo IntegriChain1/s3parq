@@ -53,7 +53,7 @@ class S3PublishParq:
         # get first row size
         row_size_est = sys.getsizeof(dataframe.head(1))
         # get number of rows
-        num_rows = int(dataframe.size.item())
+        num_rows = int(dataframe.shape[0])
         frame_size_est = row_size_est * num_rows
         # TODO: need the compression ratio from dataframe to parquet
         compression_ratio = 4
