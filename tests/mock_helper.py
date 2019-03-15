@@ -10,6 +10,7 @@ from string import ascii_lowercase
 import random
 import tempfile
 
+@mock_s3
 class MockHelper:
     """ creates some helpful dataset stuff.
         - dataframe is the frame created
@@ -17,16 +18,22 @@ class MockHelper:
         be sure to wrap this with moto @mock_s3 if you want to mock it
     """ 
 
-    def __init__(self, count=1000000, s3=False):
+    def __init__(self, count=1000000, s3=False, files=False):
         """ If s3 then will populate the s3 bucket with partitioned parquet. """
         self._dataframe = self.setup_grouped_dataframe(count=count)
         if s3:
             self._s3_bucket = self.setup_partitioned_parquet()
+        if files:
+            self._file_ops = self.setup_files_list(count, prefix="lotsa/files/")
         
 
     @property
     def dataframe(self):
         return self._dataframe
+
+    @property
+    def file_ops(self):
+        return self._file_ops
 
     @property
     def s3_bucket(self):
@@ -50,7 +57,8 @@ class MockHelper:
 
     def setup_partitioned_parquet(self):
         bucket_name = self.random_name()
-        t = tempfile.mkdtemp()
+        t = tempfile.mkdtemp() 
+        self.tmpdir = t
         s3_client = boto3.client('s3')
         df = self._dataframe
         s3_client.create_bucket(Bucket=bucket_name)
@@ -77,3 +85,25 @@ class MockHelper:
                     path = full_path[1:]#[len(str(1))+1:]
                     s3_client.upload_fileobj(data, Bucket=bucket_name,Key=path, ExtraArgs={"Metadata": extra_args})
         return bucket_name
+
+    def setup_files_list(self, count=1500, prefix="lotsa/files/"):
+        bucket_name = self.random_name()
+        temp_file_names = []
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket=bucket_name)
+            
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for x in range(count):
+                t = tempfile.NamedTemporaryFile(dir=tmp_dir)
+                head, tail = os.path.split(t.name)
+                temp_file_names.append(str(tail))
+                with open(t.name, 'rb') as data:
+                    s3_client.upload_fileobj(data, Bucket=bucket_name, Key=(prefix+tail))
+
+        retrieval_ops = {
+            "bucket": bucket_name,
+            "prefix": prefix,
+            "files": temp_file_names
+        }
+
+        return retrieval_ops
