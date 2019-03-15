@@ -1,6 +1,7 @@
 import pytest
 from s3_parq.s3_naming_helper import S3NamingHelper
 
+
 def test_validate_bucket_name():
     helper = S3NamingHelper()
 
