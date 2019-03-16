@@ -24,11 +24,22 @@ class MockHelper:
         self._s3_bucket = ''
         self._dataset = ''
         self._paths = []
+        self._partition_metadata = {"string_col":"string",
+                        "int_col":"integer",
+                        "float_col":"float",
+                        "bool_col":"boolean",
+                        "datetime_col":"datetime"}
+
         if s3:
             self._s3_bucket = self.setup_partitioned_parquet()
         if files:
             self._file_ops = self.setup_files_list(count, prefix="lotsa/files/")
         
+
+    @property
+    def partition_metadata(self):
+        return self._partition_metadata
+
     @property
     def paths(self):
         return self._paths
@@ -82,13 +93,7 @@ class MockHelper:
                             partition_cols = ['string_col','int_col','float_col','bool_col','datetime_col'])
         
         ## traverse the local parquet tree
-        extra_args = {'partition_data_types': str(
-                       {"string_col":"string",
-                        "int_col":"integer",
-                        "float_col":"float",
-                        "bool_col":"boolean",
-                        "datetime_col":"datetime"
-                        })}
+        extra_args = {'partition_data_types': str(self._partition_metadata)}
         for subdir, dirs, files in os.walk(str(t)):
             for file in files:
                 full_path = os.path.join(subdir, file)

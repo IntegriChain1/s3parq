@@ -435,7 +435,7 @@ class Test():
     def test_s3_parquet_to_dataframe(self):
         mock = MockHelper(count=500, s3 = True)
         fetch = S3FetchParq(bucket=mock.s3_bucket, prefix='', dataset='', filters={})
-        
+        fetch._partition_metadata = mock.partition_metadata
         dest = mp.Queue()
         fetch._s3_parquet_to_dataframe(bucket = mock.s3_bucket, path = '/'.join(mock.paths[0].split('/')[:-1]), destination = dest)
         

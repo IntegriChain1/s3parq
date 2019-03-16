@@ -32,14 +32,6 @@ class S3FetchParq:
     '''
     # TODO: Future add-ons : get max value of partition
 
-    ## STUB! REMOVE ME!
-    _partition_metadata = {"string_col":"string",
-                        "int_col":"integer",
-                        "float_col":"float",
-                        "bool_col":"boolean",
-                        "datetime_col":"datetime"
-                        }
-
     Filter = {
         "partition": str,
         "comparison": str,
@@ -129,8 +121,10 @@ class S3FetchParq:
             Key=first_file_key
         )
 
-        part_data_types = first_file['Metadata']['partition_data_types']
-        part_data_types = ast.literal_eval(part_data_types)
+        self._partition_metadata = first_file['Metadata']['partition_data_types']
+
+        ## save for repopulating parquet later
+        part_data_types = ast.literal_eval(self._partition_metadata)
 
         return part_data_types
 
@@ -143,7 +137,7 @@ class S3FetchParq:
         paginator = s3_client.get_paginator('list_objects')
         operation_parameters = {'Bucket': self._bucket,
                                 'Prefix': self._prefix}
-                                # 'Prefix': 'foo/baz'}
+
         page_iterator = paginator.paginate(**operation_parameters)
         for page in page_iterator:
             for item in page['Contents']:
