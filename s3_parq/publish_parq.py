@@ -16,7 +16,57 @@ class S3PublishParq:
                  key_prefix: str,
                  partitions: iter)->None:
         self.logger = logging.getLogger(__name__)
+        self.dataset = dataset
+        self.dataframe = dataframe
+        self.s3_bucket = bucket
+        self.s3_prefix = key_prefix
+        self.partitions = partitions
 
+        self.publish(s3_bucket=self._s3_bucket, dataset=self._dataset, s3_prefix=self._s3_prefix, dataframe=self._dataframe, partitions=self._partitions)
+
+
+    @property
+    def dataset(self)->str:
+        return self._dataset
+
+    @dataset.setter
+    def dataset(self,dataset:str)->None:
+        self._dataset = dataset
+
+    @property
+    def dataframe(self)->pd.DataFrame:
+        return self._dataframe
+
+    @dataframe.setter
+    def dataframe(self,dataframe:pd.DataFrame)->None:
+        self._dataframe = dataframe
+
+    @property 
+    def s3_bucket(self)->str:
+        return self._s3_bucket
+
+    @s3_bucket.setter
+    def s3_bucket(self,bucket:str)->None:
+        self._s3_bucket = bucket
+
+    @property
+    def s3_prefix(self)->str:
+        return self._s3_prefix
+
+    @s3_prefix.setter
+    def s3_prefix(self,prefix:str)->None:
+        self._s3_prefix = prefix
+
+
+    @property
+    def partitions(self)->iter:
+        return self._partitions
+
+    @partitions.setter
+    def partitions(self,partitions:iter):
+        self._partitions = partitions
+
+    def publish(self, s3_bucket:str, s3_prefix:str, dataset:str, dataframe:pd.DataFrame, partitions:iter)->None: 
         for partition in partitions:
             if partition not in dataframe.columns.tolist():
                 partition_message = f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe."
@@ -28,9 +78,9 @@ class S3PublishParq:
                 raise ValueError(partition_message)
 
         for frame in self._sized_dataframes(dataframe):
-            self._gen_parquet_to_s3(dataset=dataset, bucket=bucket,
-                                    dataframe=frame, key_prefix=key_prefix, partitions=partitions)
-            self._assign_partition_meta(bucket=bucket, dataset=dataset, dataframe=frame)
+            self._gen_parquet_to_s3(dataset=dataset, s3_bucket=s3_bucket,
+                                    dataframe=frame, s3_prefix=s3_prefix, partitions=partitions)
+            self._assign_partition_meta(s3_bucket=s3_bucket, s3_prefix=s3_prefix, dataset=dataset, dataframe=frame)
 
     def _check_partition_compatibility(self, partition:str)->bool:
         """ Make sure each partition value is hive-allowed."""
@@ -38,6 +88,7 @@ class S3PublishParq:
 
         return not partition.upper() in reserved
             
+
     def _sized_dataframes(self, dataframe: pd.DataFrame)->tuple:
         """Takes a dataframe and slices it into ~100mb dataframes for optimal parquet sizes in S3.
             RETURNS a tuple of dataframes.         
@@ -78,24 +129,25 @@ class S3PublishParq:
 
         return tuple(sized_frames)
 
-    def _gen_parquet_to_s3(self, dataset: str, bucket: str, dataframe: pd.DataFrame, key_prefix: str, partitions: list)->None:
+    def _gen_parquet_to_s3(self, dataset: str, s3_bucket: str, dataframe: pd.DataFrame, s3_prefix: str, partitions: list)->None:
         """ pushes the parquet dataset directly to s3. """
         table = pa.Table.from_pandas(dataframe, preserve_index=False)
-        uri = '/'.join(["s3:/", bucket, dataset])
+        uri = 's3://' + ('/'.join([s3_bucket, s3_prefix, dataset]).replace("//","/"))
         pq.write_to_dataset(table, compression="snappy", root_path=uri,
                             partition_cols=partitions, filesystem=s3fs.S3FileSystem())
 
-    def _assign_partition_meta(self, bucket: str, dataset: str, dataframe:pd.DataFrame)->None:
+    def _assign_partition_meta(self, s3_bucket: str, s3_prefix:str, dataset: str, dataframe:pd.DataFrame)->None:
         """ assigns the dataset partition meta to all keys in the dataset"""
         s3_client = boto3.client('s3')
         all_files = []
-        for obj in s3_client.list_objects(Bucket=bucket, Prefix=dataset)['Contents']:
+        prefix = '/'.join([s3_prefix,dataset]).strip('/')
+        for obj in s3_client.list_objects(Bucket=s3_bucket, Prefix=prefix)['Contents']:
             if obj['Key'].endswith(".parquet"):
                 all_files.append(obj['Key'])
 
         for obj in all_files:
             self.logger.info(f"Appending metadata to file {obj}")
-            s3_client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj}, Key=obj, Metadata={'partition_data_types': str(
+            s3_client.copy_object(Bucket=s3_bucket, CopySource={'Bucket': s3_bucket, 'Key': obj}, Key=obj, Metadata={'partition_data_types': str(
             self._parse_dataframe_col_types(dataframe=dataframe)     
             )}, MetadataDirective='REPLACE')
 
