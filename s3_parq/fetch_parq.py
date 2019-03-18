@@ -66,10 +66,11 @@ class S3FetchParq:
         Concat dataframes and return
     '''
 
-    def __init__(self, bucket: str, prefix: str, dataset: str, filters: List[type(Filter)]) -> None:
+    def __init__(self, bucket: str, dataset: str, prefix: str, filters: List[type(Filter)]) -> None:
         self.bucket = bucket
-        self.prefix = prefix
+        self._unmerged_prefix = prefix
         self.dataset = dataset
+        self.prefix = prefix
         self.filters = filters
 
     @property
@@ -90,7 +91,18 @@ class S3FetchParq:
 
     @prefix.setter
     def prefix(self, prefix: str) -> None:
-        self._prefix = prefix
+        dataset = self._dataset
+        self._unmerged_prefix = prefix
+        self._prefix = prefix + "/" + dataset
+
+    @property
+    def dataset(self) -> str:
+        return self.dataset
+
+    @dataset.setter
+    def dataset(self, dataset: str) -> None:
+        self._dataset = dataset
+        self.prefix = self._unmerged_prefix
 
     @property
     def filters(self):
