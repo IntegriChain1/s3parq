@@ -20,13 +20,13 @@ class Test:
         defaults ={
         'bucket': bucket,
         'dataset' : 'safedatasetname',
-        'key_prefix' : 'safekeyprefixname',
+        'prefix' : 'safekeyprefixname',
         'dataframe' : df,
         'partitions':[]
         }
         return pub_parq.S3PublishParq(   bucket=overrides.get('bucket',defaults['bucket']),
                                 dataset=overrides.get('dataset',defaults['dataset']),
-                                key_prefix=overrides.get('key_prefix',defaults['key_prefix']),
+                                prefix=overrides.get('prefix',defaults['prefix']),
                                 dataframe=overrides.get('dataframe',defaults['dataframe']),
                                 partitions=overrides.get('partitions',defaults['partitions'])
                             )
@@ -83,7 +83,7 @@ class Test:
         df.columns={"str_col":"string","int_col":"int","float_col":"float","bool_col":"boolean","grouped_col":{"option_count":4,"option_type":"string"}}
         df.generate_dataframe()
 
-        parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], key_prefix='')
+        parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], prefix='')
         return tuple([bucket,dataset,df.dataframe])
         
     # correctly sets s3 metadata

@@ -15,7 +15,7 @@ def test_parquet_sizes():
     df.columns={"int_col":"int","str_col":"string","grouped_col":{"option_count":4,"option_type":"string"}}
     df.generate_dataframe()
     df.grow_dataframe_to_size(250)
-    parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], key_prefix='')
+    parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], prefix='')
 
     for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
         if obj['Key'].endswith(".parquet"):

@@ -10,7 +10,7 @@ from moto import mock_s3
 @mock_s3
 class Test:
 
-    strings = ("bucket","dataset","key_prefix",)
+    strings = ("bucket","dataset","prefix",)
     def parq_setup_exclude(self, to_exclude):
         s3_client= boto3.client('s3')
         s3_client.create_bucket(Bucket = 'safebucketname')
@@ -20,7 +20,7 @@ class Test:
         defaults ={
         'bucket':'safebucketname',
         'dataset' : 'safedatasetname',
-        'key_prefix' : 'safekeyprefixname',
+        'prefix' : 'safekeyprefixname',
         'filters' :{"filtered_thing":"filter_val"},
         'dataframe' : df.dataframe
         }
@@ -59,7 +59,7 @@ class Test:
     # requires string
     def test_requires_string(self):
         for s in self.strings:
-            if s != 'key_prefix':
+            if s != 'prefix':
                 with pytest.raises(ValueError):
                     parq = self.parq_setup_exclude((s,))
                     parq.publish()

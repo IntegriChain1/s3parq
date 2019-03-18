@@ -73,12 +73,12 @@ class Test():
         uploaded = mh.file_ops
 
         fetcher = S3FetchParq(**self.setup_dummy_params())
-        fetcher.s3_bucket = uploaded['bucket']
-        fetcher.s3_prefix = uploaded['prefix']
+        fetcher.bucket = uploaded['bucket']
+        fetcher.prefix = uploaded['prefix']
         test_files = uploaded['files']
 
-        fetched_files = fetcher._get_all_files_list()
-        test_files_prefixed = list(map(lambda x: fetcher.s3_prefix + x, test_files))
+        fetched_files = fetcher._get_all_files_list(fetcher.bucket, fetcher.prefix)
+        test_files_prefixed = list(map(lambda x: fetcher.prefix + x, test_files))
 
         assert (test_files_prefixed.sort()) == (fetched_files.sort())
 

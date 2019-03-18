@@ -13,17 +13,17 @@ class S3PublishParq:
                  dataframe: pd.DataFrame,
                  dataset: str,
                  bucket: str,
-                 key_prefix: str,
+                 prefix: str,
                  partitions: iter)->None:
         self.logger = logging.getLogger(__name__)
         self.dataset = dataset
         self.dataframe = dataframe
-        self.s3_bucket = bucket
-        self.s3_prefix = key_prefix
+        self.bucket = bucket
+        self.prefix = prefix
         self.partitions = partitions
 
-        self.publish(s3_bucket=self._s3_bucket, dataset=self._dataset,
-                     s3_prefix=self._s3_prefix, dataframe=self._dataframe, partitions=self._partitions)
+        self.publish(bucket=self._bucket, dataset=self._dataset,
+                     prefix=self._prefix, dataframe=self._dataframe, partitions=self._partitions)
 
     @property
     def dataset(self)->str:
@@ -42,20 +42,20 @@ class S3PublishParq:
         self._dataframe = dataframe
 
     @property
-    def s3_bucket(self)->str:
-        return self._s3_bucket
+    def bucket(self)->str:
+        return self._bucket
 
-    @s3_bucket.setter
-    def s3_bucket(self, bucket: str)->None:
-        self._s3_bucket = bucket
+    @bucket.setter
+    def bucket(self, bucket: str)->None:
+        self._bucket = bucket
 
     @property
-    def s3_prefix(self)->str:
-        return self._s3_prefix
+    def prefix(self)->str:
+        return self._prefix
 
-    @s3_prefix.setter
-    def s3_prefix(self, prefix: str)->None:
-        self._s3_prefix = prefix
+    @prefix.setter
+    def prefix(self, prefix: str)->None:
+        self._prefix = prefix
 
     @property
     def partitions(self)->iter:
@@ -65,7 +65,7 @@ class S3PublishParq:
     def partitions(self, partitions: iter):
         self._partitions = partitions
 
-    def publish(self, s3_bucket: str, s3_prefix: str, dataset: str, dataframe: pd.DataFrame, partitions: iter)->None:
+    def publish(self, bucket: str, prefix: str, dataset: str, dataframe: pd.DataFrame, partitions: iter)->None:
         for partition in partitions:
             if partition not in dataframe.columns.tolist():
                 partition_message = f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe."
@@ -77,10 +77,10 @@ class S3PublishParq:
                 raise ValueError(partition_message)
 
         for frame in self._sized_dataframes(dataframe):
-            self._gen_parquet_to_s3(dataset=dataset, s3_bucket=s3_bucket,
-                                    dataframe=frame, s3_prefix=s3_prefix, partitions=partitions)
+            self._gen_parquet_to_s3(dataset=dataset, bucket=bucket,
+                                    dataframe=frame, prefix=prefix, partitions=partitions)
             self._assign_partition_meta(
-                s3_bucket=s3_bucket, s3_prefix=s3_prefix, dataset=dataset, dataframe=frame)
+                bucket=bucket, prefix=prefix, dataset=dataset, dataframe=frame)
 
     def _check_partition_compatibility(self, partition: str)->bool:
         """ Make sure each partition value is hive-allowed."""
@@ -128,26 +128,26 @@ class S3PublishParq:
 
         return tuple(sized_frames)
 
-    def _gen_parquet_to_s3(self, dataset: str, s3_bucket: str, dataframe: pd.DataFrame, s3_prefix: str, partitions: list)->None:
+    def _gen_parquet_to_s3(self, dataset: str, bucket: str, dataframe: pd.DataFrame, prefix: str, partitions: list)->None:
         """ pushes the parquet dataset directly to s3. """
         table = pa.Table.from_pandas(dataframe, preserve_index=False)
         uri = 's3://' + \
-            ('/'.join([s3_bucket, s3_prefix, dataset]).replace("//", "/"))
+            ('/'.join([bucket, prefix, dataset]).replace("//", "/"))
         pq.write_to_dataset(table, compression="snappy", root_path=uri,
                             partition_cols=partitions, filesystem=s3fs.S3FileSystem())
 
-    def _assign_partition_meta(self, s3_bucket: str, s3_prefix: str, dataset: str, dataframe: pd.DataFrame)->None:
+    def _assign_partition_meta(self, bucket: str, prefix: str, dataset: str, dataframe: pd.DataFrame)->None:
         """ assigns the dataset partition meta to all keys in the dataset"""
         s3_client = boto3.client('s3')
         all_files = []
-        prefix = '/'.join([s3_prefix, dataset]).strip('/')
-        for obj in s3_client.list_objects(Bucket=s3_bucket, Prefix=prefix)['Contents']:
+        prefix = '/'.join([prefix, dataset]).strip('/')
+        for obj in s3_client.list_objects(Bucket=bucket, Prefix=prefix)['Contents']:
             if obj['Key'].endswith(".parquet"):
                 all_files.append(obj['Key'])
 
         for obj in all_files:
             self.logger.info(f"Appending metadata to file {obj}")
-            s3_client.copy_object(Bucket=s3_bucket, CopySource={'Bucket': s3_bucket, 'Key': obj}, Key=obj, Metadata={'partition_data_types': str(
+            s3_client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj}, Key=obj, Metadata={'partition_data_types': str(
                 self._parse_dataframe_col_types(dataframe=dataframe)
             )}, MetadataDirective='REPLACE')
 
