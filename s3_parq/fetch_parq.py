@@ -66,17 +66,17 @@ class S3FetchParq:
     '''
 
     def __init__(self, bucket: str, prefix: str, dataset: str, filters: List[type(Filter)]) -> None:
-        self.s3_bucket = bucket
-        self.s3_prefix = prefix
+        self.bucket = bucket
+        self.prefix = prefix
         self.dataset = dataset
         self.filters = filters
 
     @property
-    def s3_bucket(self) -> str:
+    def bucket(self) -> str:
         return self._bucket
 
-    @s3_bucket.setter
-    def s3_bucket(self, bucket: str) -> None:
+    @bucket.setter
+    def bucket(self, bucket: str) -> None:
         validater = S3NamingHelper().validate_bucket_name(bucket)
         if validater[0]:
             self._bucket = bucket
@@ -84,11 +84,11 @@ class S3FetchParq:
             raise ValueError(validater[1])
 
     @property
-    def s3_prefix(self) -> str:
+    def prefix(self) -> str:
         return self._prefix
 
-    @s3_prefix.setter
-    def s3_prefix(self, prefix: str) -> None:
+    @prefix.setter
+    def prefix(self, prefix: str) -> None:
         self._prefix = prefix
 
     @property
@@ -103,7 +103,14 @@ class S3FetchParq:
 
     def fetch(self):
         ''' Access function to kick off all bits and return result. '''
-        pass
+        
+        all_files = self._get_all_files_list(bucket=self._bucket, prefix=self._prefix)
+        
+        partition_types = self._get_partitions_and_types(all_files[0])
+        
+        partition_values = self._parse_partitions_and_values(all_files)
+
+        typed_values = self._set_partition_value_types(partition_values, partition_types)
 
     def _get_partitions_and_types(self, first_file_key: str):
         ''' Fetch a list of all the partitions actually there and their 
@@ -121,31 +128,32 @@ class S3FetchParq:
             Key=first_file_key
         )
 
+        ## save for repopulating parquet later
         self._partition_metadata = first_file['Metadata']['partition_data_types']
 
-        ## save for repopulating parquet later
         part_data_types = ast.literal_eval(self._partition_metadata)
 
         return part_data_types
 
-    def _get_all_files_list(self):
+    def _get_all_files_list(self, bucket:str, prefix:str)->list:
         ''' Get a list of all files to get all partitions values.
         Necesarry to catch all partition values for non-filtered partiions.
         '''
         objects_in_bucket = []
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects')
-        operation_parameters = {'Bucket': self._bucket,
-                                'Prefix': self._prefix}
+        operation_parameters = {'Bucket': bucket,
+                                'Prefix': prefix}
 
         page_iterator = paginator.paginate(**operation_parameters)
         for page in page_iterator:
             for item in page['Contents']:
-                objects_in_bucket.append(item['Key'])
+                if item['Key'].endswith('.parquet'):
+                    objects_in_bucket.append(item['Key'])
 
         return objects_in_bucket
 
-    def _parse_partitions_and_values(self, file_paths: List[str]):
+    def _parse_partitions_and_values(self, file_paths: List[str])->dict:
         ''' Take the list of all the file keys and return a dict of the
         partitions with arrays of their values.
         '''
@@ -209,7 +217,6 @@ class S3FetchParq:
 
         def construct_paths(typed_parts, previous_fil_keys):
             if len(typed_parts)>0:
-                old_filter_keys = previous_fil_keys
                 part = typed_parts.popitem(last=False)
                 new_filter_keys = list()
                 for value in part[1]:
@@ -223,7 +230,7 @@ class S3FetchParq:
             else:
                 filter_keys.append(previous_fil_keys)
 
-        construct_paths(typed_parts, [self.s3_prefix])
+        construct_paths(typed_parts, [self.prefix])
 
         #TODO: fix the below mess with random array
         return filter_keys[0]
