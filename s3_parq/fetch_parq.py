@@ -103,14 +103,23 @@ class S3FetchParq:
 
     def fetch(self):
         ''' Access function to kick off all bits and return result. '''
-        
-        all_files = self._get_all_files_list(bucket=self._bucket, prefix=self._prefix)
-        
+
+        bucket = self._bucket
+        prefix = self._prefix
+
+        all_files = self._get_all_files_list()
+
         partition_types = self._get_partitions_and_types(all_files[0])
+
+        self._validate_matching_filter_data_type(partition_types)
         
         partition_values = self._parse_partitions_and_values(all_files)
 
-        typed_values = self._set_partition_value_types(partition_values, partition_types)
+        typed_values = self._set_partition_value_data_types(partition_values, partition_types)
+
+        filtered_paths = self._set_filtered_prefix_list(typed_values)
+
+        return self._get_filtered_data(bucket=bucket, paths=filtered_paths)
 
     def _get_partitions_and_types(self, first_file_key: str):
         ''' Fetch a list of all the partitions actually there and their 
@@ -121,10 +130,10 @@ class S3FetchParq:
         '''
         parts_and_types = []
         s3_client = boto3.client('s3')
-        bucket = self.s3_bucket
+        bucket = self._bucket
 
         first_file = s3_client.head_object(
-            Bucket=self.s3_bucket,
+            Bucket=self._bucket,
             Key=first_file_key
         )
 
@@ -135,15 +144,15 @@ class S3FetchParq:
 
         return part_data_types
 
-    def _get_all_files_list(self, bucket:str, prefix:str)->list:
+    def _get_all_files_list(self)->list:
         ''' Get a list of all files to get all partitions values.
         Necesarry to catch all partition values for non-filtered partiions.
         '''
         objects_in_bucket = []
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects')
-        operation_parameters = {'Bucket': bucket,
-                                'Prefix': prefix}
+        operation_parameters = {'Bucket': self._bucket,
+                                'Prefix': self._prefix}
 
         page_iterator = paginator.paginate(**operation_parameters)
         for page in page_iterator:
@@ -175,7 +184,7 @@ class S3FetchParq:
         
         return parts
      
-    def _set_partition_value_data_types(self, parsed_parts, part_types):
+    def _set_partition_value_data_types(self, parsed_parts: dict, part_types: dict):
         ''' Convert the collected values to their python data types for use.
         '''
         for part, values in parsed_parts.items():
@@ -197,7 +206,7 @@ class S3FetchParq:
         return parsed_parts
 
     # TODO: Neaten up?
-    def _set_filtered_prefix_list(self, typed_parts):
+    def _set_filtered_prefix_list(self, typed_parts: dict)->List[str]:
         ''' Create list of all "paths" to files after the filtered partitions
         are set ie all non-matching partitions are excluded.
         '''
@@ -215,7 +224,7 @@ class S3FetchParq:
                             )
                         )
 
-        def construct_paths(typed_parts, previous_fil_keys):
+        def construct_paths(typed_parts, previous_fil_keys: List[str])->None:
             if len(typed_parts)>0:
                 part = typed_parts.popitem(last=False)
                 new_filter_keys = list()
@@ -291,7 +300,7 @@ class S3FetchParq:
                 partitions[key] = bool(val)
         return partitions
 
-    def _validate_filter_rules(self, filters: List[type(Filter)]):
+    def _validate_filter_rules(self, filters: List[type(Filter)])->None:
         ''' Validate that the filters are the correct format and follow basic
         comparison rules.
         '''
@@ -310,7 +319,7 @@ class S3FetchParq:
             elif (f["comparison"] in single_value_comparisons) & (len(f["values"])!=1):
                 raise ValueError(f"Comparison {f['comparison']} can only be used with one filter value.")
 
-    def _validate_matching_filter_data_type(self, part_types):
+    def _validate_matching_filter_data_type(self, part_types)->None:
         ''' Validate that the filters passed are matching to the partitions'
         listed datatypes. This includes validating comparisons too.
         '''
