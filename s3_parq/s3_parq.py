@@ -12,9 +12,9 @@ class S3Parq:
         self._set_kwargs_as_attrs(**kwargs)
         self.logger = logging.getLogger(__name__)
 
-    def publish(self, dataset: str = None, bucket: str = None, dataframe: pd.DataFrame = None, key_prefix: str = None, partitions: iter = None)->None:
+    def publish(self, dataset: str = None, bucket: str = None, dataframe: pd.DataFrame = None, prefix: str = None, partitions: iter = None)->None:
         # this round-about setting of args gives IDEs back hinting and adds mechanical type checking.
-        for attr, val in {"dataset": dataset, "bucket": bucket, "dataframe": dataframe, "partitions": partitions, "key_prefix": key_prefix}.items():
+        for attr, val in {"dataset": dataset, "bucket": bucket, "dataframe": dataframe, "partitions": partitions, "prefix": prefix}.items():
             if val is not None:
                 self._set_kwargs_as_attrs({attr: val})
                 self.logger.debug(
@@ -25,13 +25,13 @@ class S3Parq:
         S3PublishParq(dataset=self.dataset,
                       bucket=self.bucket,
                       dataframe=self.dataframe,
-                      key_prefix=getattr(self, "key_prefix", ''),
+                      prefix=getattr(self, "prefix", ''),
                       partitions=getattr(self, "partitions", [])
                       )
 
-    def fetch(self, dataset: str = None, bucket: str = None, filters: dict = None, key_prefix: str = None)->None:
+    def fetch(self, dataset: str = None, bucket: str = None, filters: dict = None, prefix: str = None)->None:
         # this round-about setting of args gives IDEs back hinting and adds mechanical type checking.
-        for attr, val in {"dataset": dataset, "bucket": bucket, "filters": filters, "key_prefix": key_prefix}.items():
+        for attr, val in {"dataset": dataset, "bucket": bucket, "filters": filters, "prefix": prefix}.items():
             if val is not None:
                 self._set_kwargs_as_attrs({attr: val})
                 self.logger.debug(f"Set fetch instance value {attr} to {val}")
@@ -42,7 +42,7 @@ class S3Parq:
         s3FetchParq(dataset=self.dataset,
                     bucket=self.bucket,
                     filters=getattr(self,"filters",dict()),
-                    key_prefix=getattr(self,"key_prefix",'')
+                    prefix=getattr(self,"prefix",'')
                     )
         '''
     @property
@@ -89,13 +89,13 @@ class S3Parq:
         self._filters = filters
 
     @property
-    def key_prefix(self)->str:
-        return self._key_prefix
+    def prefix(self)->str:
+        return self._prefix
 
-    @key_prefix.setter
-    def key_prefix(self, key_prefix: str)->None:
-        self._type_check_attr('key_prefix', key_prefix)
-        self._key_prefix = key_prefix
+    @prefix.setter
+    def prefix(self, prefix: str)->None:
+        self._type_check_attr('prefix', prefix)
+        self._prefix = prefix
 
     def _check_required_attr(self, attributes: iter)->None:
         """ make sure all required attributes are set before running.
@@ -111,7 +111,7 @@ class S3Parq:
         """ checks typing of attribute and throws error if it is incorrect."""
         for k in [('dataset', str,),
                   ('bucket', str,),
-                  ('key_prefix', str,),
+                  ('prefix', str,),
                   ('dataframe', pd.DataFrame,),
                   ('filters', dict,)]:
             if attr == k[0]:

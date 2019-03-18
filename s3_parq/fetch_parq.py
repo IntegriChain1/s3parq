@@ -11,6 +11,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from .s3_naming_helper import S3NamingHelper
 
+
 class S3FetchParq:
     ''' S3 Parquet to Dataframe Fetcher.
     This class handles the portion of work that will return a concatenated 
@@ -123,10 +124,11 @@ class S3FetchParq:
         partition_types = self._get_partitions_and_types(all_files[0])
 
         self._validate_matching_filter_data_type(partition_types)
-        
+
         partition_values = self._parse_partitions_and_values(all_files)
 
-        typed_values = self._set_partition_value_data_types(partition_values, partition_types)
+        typed_values = self._set_partition_value_data_types(
+            partition_values, partition_types)
 
         filtered_paths = self._set_filtered_prefix_list(typed_values)
 
@@ -148,7 +150,7 @@ class S3FetchParq:
             Key=first_file_key
         )
 
-        ## save for repopulating parquet later
+        # save for repopulating parquet later
         self._partition_metadata = first_file['Metadata']['partition_data_types']
 
         part_data_types = ast.literal_eval(self._partition_metadata)
@@ -185,16 +187,16 @@ class S3FetchParq:
             file_path = file_path[prefix_len:]
             unparsed_parts = file_path.split("/")
             del unparsed_parts[-1]
-            
+
             for part in unparsed_parts:
                 key, value = part.split("=")
                 if key not in parts:
                     parts.update({key: set([value])})
                 else:
                     parts[key].add(value)
-        
+
         return parts
-     
+
     def _set_partition_value_data_types(self, parsed_parts: dict, part_types: dict):
         ''' Convert the collected values to their python data types for use.
         '''
@@ -208,11 +210,13 @@ class S3FetchParq:
                 elif part_type == 'float':
                     parsed_parts[part] = set(map(float, values))
                 elif part_type == 'datetime':
-                    parsed_parts[part] = set(map(datetime.fromisoformat, values))
+                    parsed_parts[part] = set(
+                        map(datetime.fromisoformat, values))
                 elif part_type == 'bool':
                     parsed_parts[part] = set(map(bool, values))
             except:
-                raise ValueError(f"Invalid partition type: {part_type} does not match partition {part}")
+                raise ValueError(
+                    f"Invalid partition type: {part_type} does not match partition {part}")
 
         return parsed_parts
 
@@ -230,18 +234,19 @@ class S3FetchParq:
                     comparison = self.ops[f['comparison']]
                     for v in f['values']:
                         typed_parts[part] = set(filter(
-                                lambda x: comparison(x, v),
-                                typed_parts[part]
-                            )
+                            lambda x: comparison(x, v),
+                            typed_parts[part]
+                        )
                         )
 
         def construct_paths(typed_parts, previous_fil_keys: List[str])->None:
-            if len(typed_parts)>0:
+            if len(typed_parts) > 0:
                 part = typed_parts.popitem(last=False)
                 new_filter_keys = list()
                 for value in part[1]:
                     mapped_keys = list(map(
-                        (lambda x: str(x) + str(part[0]) + "=" + str(value) + "/"),
+                        (lambda x: str(x) +
+                         str(part[0]) + "=" + str(value) + "/"),
                         previous_fil_keys
                     ))
                     new_filter_keys = new_filter_keys + mapped_keys
@@ -252,59 +257,60 @@ class S3FetchParq:
 
         construct_paths(typed_parts, [self.prefix])
 
-        #TODO: fix the below mess with random array
+        # TODO: fix the below mess with random array
         return filter_keys[0]
 
-    def _get_filtered_data(self, bucket:str, paths:list)->pd.DataFrame:
+    def _get_filtered_data(self, bucket: str, paths: list)->pd.DataFrame:
         ''' Pull all filtered parquets down and return a dataframe.
         '''
         temp_queue = mp.Queue()
         temp_frames = []
-        threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(bucket, path, temp_queue,)) for path in paths]
+        threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(
+            bucket, path, temp_queue,)) for path in paths]
         for thread in threads:
             thread.start()
             temp_frames.append(temp_queue.get())
-           
+
         for thread in threads:
             thread.join()
 
         return pd.concat(temp_frames)
 
-
-    def _s3_parquet_to_dataframe(self, bucket:str, path:str, destination:list)->None:
+    def _s3_parquet_to_dataframe(self, bucket: str, path: str, destination: list)->None:
         """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
         s3 = s3fs.S3FileSystem()
         uri = f"{bucket}/{path}"
-        table = pq.ParquetDataset(uri, filesystem= s3)
+        table = pq.ParquetDataset(uri, filesystem=s3)
         frame = table.read_pandas().to_pandas()
         partitions = self._repopulate_partitions(uri)
-        for k,v in partitions.items():
+        for k, v in partitions.items():
             frame[k] = v
         destination.put(frame)
 
-
-    def _repopulate_partitions(self,partition_string:str)->tuple:
+    def _repopulate_partitions(self, partition_string: str)->tuple:
         """ for each val in the partition string creates a list that can be added back into the dataframe"""
         raw = partition_string.split('/')
         partitions = {}
         for string in raw:
             if '=' in string:
-                k,v = string.split('=')
+                k, v = string.split('=')
                 partitions[k] = v
 
         for key, val in partitions.items():
             try:
-                dtype = self._partition_metadata[key] 
+                dtype = self._partition_metadata[key]
             except:
-                raise ValueError(f"{key} is not a recognized partition in the current s3 meta.")
+                raise ValueError(
+                    f"{key} is not a recognized partition in the current s3 meta.")
             if dtype == 'string':
-                partitions[key] = str(val)    
+                partitions[key] = str(val)
             elif dtype == 'integer':
                 partitions[key] = int(val)
             elif dtype == 'float':
                 partitions[key] = float(val)
             elif dtype == 'datetime':
-                partitions[key] = datetime.datetime.strptime(val, '%Y-%m-%d %H:%M:%S')
+                partitions[key] = datetime.datetime.strptime(
+                    val, '%Y-%m-%d %H:%M:%S')
             elif dtype == 'category':
                 partitions[key] = pd.Category(val)
             elif dtype == 'bool':
@@ -323,12 +329,15 @@ class S3FetchParq:
             ">="
         ]
         for f in filters:
-            if not all(key in f for key in ("partition","comparison","values")):
-                raise ValueError("Filters require partition, comparison, and values.")
+            if not all(key in f for key in ("partition", "comparison", "values")):
+                raise ValueError(
+                    "Filters require partition, comparison, and values.")
             elif f["comparison"] not in self.ops:
-                raise ValueError(f"Comparison {f['comparison']} is not supported.")
-            elif (f["comparison"] in single_value_comparisons) & (len(f["values"])!=1):
-                raise ValueError(f"Comparison {f['comparison']} can only be used with one filter value.")
+                raise ValueError(
+                    f"Comparison {f['comparison']} is not supported.")
+            elif (f["comparison"] in single_value_comparisons) & (len(f["values"]) != 1):
+                raise ValueError(
+                    f"Comparison {f['comparison']} can only be used with one filter value.")
 
     def _validate_matching_filter_data_type(self, part_types)->None:
         ''' Validate that the filters passed are matching to the partitions'
@@ -357,6 +366,5 @@ class S3FetchParq:
 
             if (f["comparison"] in num_comparisons):
                 if fil_part in non_num_types:
-                    raise ValueError(f"Comparison {f['comparison']} cannot be used on partition types of {fil_part}")
-
-
+                    raise ValueError(
+                        f"Comparison {f['comparison']} cannot be used on partition types of {fil_part}")
