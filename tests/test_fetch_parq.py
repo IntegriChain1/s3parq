@@ -17,8 +17,8 @@ class Test():
         "prefix": "fake-prefix",
         "filters": [
             {"partition": "fake-partition",
-            "comparison": "==",
-            "value": "fake-value"}
+             "comparison": "==",
+             "value": "fake-value"}
         ]
     }
 
@@ -92,7 +92,7 @@ class Test():
     # Test that it filters partitions fully
     def test_filter_all_parts(self):
         pass
-    
+
     # Test that it handles when only some partitions are filtered
     def test_filter_partial(self):
         pass
