@@ -33,7 +33,7 @@ class MockHelper:
 
         if s3:
             self._s3_bucket = self.setup_partitioned_parquet()
-        if files:
+        elif files:
             self._file_ops = self.setup_files_list(
                 count, prefix="lotsa/files/")
 
@@ -106,7 +106,7 @@ class MockHelper:
                     s3_client.upload_fileobj(data, Bucket=bucket_name, Key=key, ExtraArgs={
                                              "Metadata": extra_args})
                     self._paths.append(key)
-        return bucket_name
+        return self._s3_bucket
 
     def setup_files_list(self, count=1500, prefix="lotsa/files/"):
         bucket_name = self.random_name()

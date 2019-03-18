@@ -155,7 +155,6 @@ class Test():
     def test_get_data_types_from_s3(self):
         mh = MockHelper(count=10, s3=True, files=False)
         bucket = mh.s3_bucket
-
         dummy_params = self.setup_dummy_params()
         fetcher = S3FetchParq(**dummy_params)
         fetcher.bucket = bucket
