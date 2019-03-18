@@ -100,6 +100,7 @@ class Test:
 
         parq = pub_parq.S3PublishParq(
             dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], prefix='')
+
         return tuple([bucket, dataset, df.dataframe])
 
     # correctly sets s3 metadata

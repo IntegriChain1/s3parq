@@ -1,6 +1,6 @@
 import boto3
 from .publish_parq import S3PublishParq
-#from .fetch_parq import S3FetchParq
+from .fetch_parq import S3FetchParq
 import pandas as pd
 import sys
 import logging
@@ -22,12 +22,13 @@ class S3Parq:
         required_attributes = ('dataset', 'bucket', 'dataframe',)
         self._check_required_attr(required_attributes)
 
-        S3PublishParq(dataset=self.dataset,
-                      bucket=self.bucket,
-                      dataframe=self.dataframe,
-                      prefix=getattr(self, "prefix", ''),
-                      partitions=getattr(self, "partitions", [])
+        pub = S3PublishParq(dataset=self._dataset,
+                      bucket=self._bucket,
+                      dataframe=self._dataframe,
+                      prefix=getattr(self, "_prefix", ''),
+                      partitions=getattr(self, "_partitions", [])
                       )
+        return pub.publish()
 
     def fetch(self, dataset: str = None, bucket: str = None, filters: dict = None, prefix: str = None)->None:
         # this round-about setting of args gives IDEs back hinting and adds mechanical type checking.
@@ -38,13 +39,15 @@ class S3Parq:
 
         required_attributes = ('dataset', 'bucket',)
         self._check_required_attr(required_attributes)
-        '''
-        s3FetchParq(dataset=self.dataset,
-                    bucket=self.bucket,
-                    filters=getattr(self,"filters",dict()),
-                    prefix=getattr(self,"prefix",'')
+        
+        fetcher = S3FetchParq(dataset=self._dataset,
+                    bucket=self._bucket,
+                    filters=getattr(self,"_filters",dict()),
+                    prefix=getattr(self,"_prefix",'')
                     )
-        '''
+        
+        return fetcher.fetch()
+
     @property
     def dataset(self)->str:
         return self._dataset
@@ -112,6 +115,7 @@ class S3Parq:
         for k in [('dataset', str,),
                   ('bucket', str,),
                   ('prefix', str,),
+                  ('partitions',list,),
                   ('dataframe', pd.DataFrame,),
                   ('filters', dict,)]:
             if attr == k[0]:

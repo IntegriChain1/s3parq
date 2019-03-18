@@ -46,11 +46,11 @@ class Test():
     def test_dataset_addition(self):
         good_fetch = S3FetchParq(**self.setup_dummy_params())
 
-        assert good_fetch.prefix == "fake-prefix/fake-dataset"
+        assert good_fetch._key_path() == "fake-prefix/fake-dataset"
 
         good_fetch.dataset = "new-fake-dataset"
 
-        assert good_fetch.prefix == "fake-prefix/new-fake-dataset"
+        assert good_fetch._key_path() == "fake-prefix/new-fake-dataset"
 
     # Test that if inapropriate filters are passed it'll be denied
     def test_invalid_filters(self):
@@ -84,12 +84,14 @@ class Test():
 
         fetcher = S3FetchParq(**self.setup_dummy_params())
         fetcher.bucket = uploaded['bucket']
-        fetcher._prefix = uploaded['prefix']
+        fetcher.dataset = uploaded['dataset']
+        fetcher.prefix = uploaded['prefix']
         test_files = uploaded['files']
 
         fetched_files = fetcher._get_all_files_list()
+       
         test_files_prefixed = list(
-            map(lambda x: fetcher.prefix + x, test_files))
+            map(lambda x: fetcher._key_path() + x, test_files))
 
         assert (test_files_prefixed.sort()) == (fetched_files.sort())
 
@@ -111,11 +113,11 @@ class Test():
     # Test that all valid partitions are correctly parsed
     def test_get_partitions(self):
         parts = [
-            "prefix/fil-1=1/fil-2=2/fil-3=str/rngf1.parc",
-            "prefix/fil-1=1/fil-2=2/fil-3=rng-str/rngf2.parc",
-            "prefix/fil-1=1/fil-2=4/fil-3=str_rng/rngf3.parc",
-            "prefix/fil-1=5/fil-2=2/fil-3=str/rngf4.parc",
-            "prefix/fil-1=5/fil-2=4/fil-3=99/rngf5.parc"
+            "fake-prefix/fake-dataset/fil-1=1/fil-2=2/fil-3=str/rngf1.parquet",
+            "fake-prefix/fake-dataset/fil-1=1/fil-2=2/fil-3=rng-str/rngf2.parquet",
+            "fake-prefix/fake-dataset/fil-1=1/fil-2=4/fil-3=str_rng/rngf3.parquet",
+            "fake-prefix/fake-dataset/fil-1=5/fil-2=2/fil-3=str/rngf4.parquet",
+            "fake-prefix/fake-dataset/fil-1=5/fil-2=4/fil-3=99/rngf5.parquet"
         ]
         parsed_parts = OrderedDict({
             "fil-1": {
@@ -136,7 +138,6 @@ class Test():
 
         dummy_params = self.setup_dummy_params()
         fetcher = S3FetchParq(**dummy_params)
-        fetcher.s3_prefix = "prefix/"
 
         test_parsed_part = fetcher._parse_partitions_and_values(parts)
 
@@ -420,7 +421,7 @@ class Test():
         fil_paths = []
 
         params = self.setup_dummy_params()
-        params["prefix"] = "fake-prefix/"
+        params["prefix"] = "fake-prefix"
         params["filters"] = filters
 
         fetcher = S3FetchParq(**params)

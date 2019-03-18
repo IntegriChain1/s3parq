@@ -31,13 +31,15 @@ def test_end_to_end():
                          partitions=['string_options',
                                      'datetime_options', 'float_options']
                          )
+    
     # publish it
     pub.publish()
+
 
     # go get it
     fetch = s3_parq.S3Parq(bucket=bucket_name,
                            dataset=dataset
-                           )
+                          )
 
     dataframe = fetch.fetch()
 

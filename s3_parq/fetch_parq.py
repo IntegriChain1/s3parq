@@ -68,7 +68,6 @@ class S3FetchParq:
 
     def __init__(self, bucket: str, dataset: str, prefix: str, filters: List[type(Filter)]) -> None:
         self.bucket = bucket
-        self._unmerged_prefix = prefix
         self.dataset = dataset
         self.prefix = prefix
         self.filters = filters
@@ -91,9 +90,7 @@ class S3FetchParq:
 
     @prefix.setter
     def prefix(self, prefix: str) -> None:
-        dataset = self._dataset
-        self._unmerged_prefix = prefix
-        self._prefix = prefix + "/" + dataset
+        self._prefix = prefix
 
     @property
     def dataset(self) -> str:
@@ -102,8 +99,7 @@ class S3FetchParq:
     @dataset.setter
     def dataset(self, dataset: str) -> None:
         self._dataset = dataset
-        self.prefix = self._unmerged_prefix
-
+        
     @property
     def filters(self):
         return self._filters
@@ -114,11 +110,14 @@ class S3FetchParq:
 
         self._filters = filters
 
+    def _key_path(self):
+        return '/'.join([self._prefix,self._dataset])
+
     def fetch(self):
         ''' Access function to kick off all bits and return result. '''
 
         bucket = self._bucket
-        prefix = self._prefix
+        prefix = self._key_path()
 
         all_files = self._get_all_files_list()
 
@@ -166,8 +165,7 @@ class S3FetchParq:
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects')
         operation_parameters = {'Bucket': self._bucket,
-                                'Prefix': self._prefix}
-
+                                'Prefix': self._key_path()}
         page_iterator = paginator.paginate(**operation_parameters)
         for page in page_iterator:
             for item in page['Contents']:
@@ -182,7 +180,7 @@ class S3FetchParq:
         '''
         # TODO: find more neat/efficient way to do this
         parts = OrderedDict()
-        prefix_len = len(self.s3_prefix)
+        prefix_len = len(self._key_path())
         for file_path in file_paths:
             # Delete prefix, split the parts out, delete the file name
             file_path = file_path[prefix_len:]
@@ -190,11 +188,12 @@ class S3FetchParq:
             del unparsed_parts[-1]
 
             for part in unparsed_parts:
-                key, value = part.split("=")
-                if key not in parts:
-                    parts.update({key: set([value])})
-                else:
-                    parts[key].add(value)
+                if "=" in part:
+                    key, value = part.split("=")
+                    if key not in parts:
+                        parts.update({key: set([value])})
+                    else:
+                        parts[key].add(value)
 
         return parts
 
@@ -256,7 +255,7 @@ class S3FetchParq:
             else:
                 filter_keys.append(previous_fil_keys)
 
-        construct_paths(typed_parts, [self.prefix])
+        construct_paths(typed_parts, [self._key_path()])
 
         # TODO: fix the below mess with random array
         return filter_keys[0]

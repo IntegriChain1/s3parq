@@ -35,7 +35,7 @@ class MockHelper:
             self._s3_bucket = self.setup_partitioned_parquet()
         elif files:
             self._file_ops = self.setup_files_list(
-                count, prefix="lotsa/files/")
+                count)
 
     @property
     def partition_metadata(self):
@@ -108,7 +108,10 @@ class MockHelper:
                     self._paths.append(key)
         return self._s3_bucket
 
-    def setup_files_list(self, count=1500, prefix="lotsa/files/"):
+    def setup_files_list(self, count=1500):
+        prefix = self.random_name()
+        dataset = self.random_name()
+        key_path = '/'.join([prefix,dataset])
         bucket_name = self.random_name()
         temp_file_names = []
         s3_client = boto3.client('s3')
@@ -121,11 +124,12 @@ class MockHelper:
                 temp_file_names.append(str(tail))
                 with open(t.name, 'rb') as data:
                     s3_client.upload_fileobj(
-                        data, Bucket=bucket_name, Key=(prefix+tail))
+                        data, Bucket=bucket_name, Key=(key_path+tail))
 
         retrieval_ops = {
             "bucket": bucket_name,
             "prefix": prefix,
+            "dataset": dataset,
             "files": temp_file_names
         }
 

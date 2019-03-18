@@ -22,9 +22,6 @@ class S3PublishParq:
         self.prefix = prefix
         self.partitions = partitions
 
-        self.publish(bucket=self._bucket, dataset=self._dataset,
-                     prefix=self._prefix, dataframe=self._dataframe, partitions=self._partitions)
-
     @property
     def dataset(self)->str:
         return self._dataset
@@ -65,10 +62,10 @@ class S3PublishParq:
     def partitions(self, partitions: iter):
         self._partitions = partitions
 
-    def publish(self, bucket: str, prefix: str, dataset: str, dataframe: pd.DataFrame, partitions: iter)->None:
+    def publish(self)->None:
         self.logger.debug("Checking partition args...")
-        for partition in partitions:
-            if partition not in dataframe.columns.tolist():
+        for partition in self._partitions:
+            if partition not in self._dataframe.columns.tolist():
                 partition_message = f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe."
                 self.logger.critical(partition_message)
                 raise ValueError(partition_message)
@@ -78,11 +75,11 @@ class S3PublishParq:
                 raise ValueError(partition_message)
         self.logger.debug("Done checking partitions.")
         self.logger.debug("Begin writing to S3..")
-        for frame in self._sized_dataframes(dataframe):
-            self._gen_parquet_to_s3(dataset=dataset, bucket=bucket,
-                                    dataframe=frame, prefix=prefix, partitions=partitions)
+        for frame in self._sized_dataframes(self._dataframe):
+            self._gen_parquet_to_s3(dataset=self._dataset, bucket=self._bucket,
+                                    dataframe=frame, prefix=self._prefix, partitions=self._partitions)
             self._assign_partition_meta(
-                bucket=bucket, dataset=dataset, prefix=prefix, dataframe=frame)
+                bucket=self._bucket, dataset=self._dataset, prefix=self._prefix, dataframe=frame)
         self.logger.debug("Done writing to S3.")
 
     def _check_partition_compatibility(self, partition: str)->bool:
