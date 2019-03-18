@@ -84,7 +84,7 @@ class Test():
 
         fetcher = S3FetchParq(**self.setup_dummy_params())
         fetcher.bucket = uploaded['bucket']
-        fetcher.prefix = uploaded['prefix']
+        fetcher._prefix = uploaded['prefix']
         test_files = uploaded['files']
 
         fetched_files = fetcher._get_all_files_list()
