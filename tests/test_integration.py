@@ -35,7 +35,7 @@ def test_end_to_end():
     # publish it
     pub.publish()
 
-
+ 
     # go get it
     fetch = s3_parq.S3Parq(bucket=bucket_name,
                            dataset=dataset

@@ -5,6 +5,7 @@ import datetime
 import operator
 from typing import List
 import multiprocessing as mp
+from multiprocessing import get_context
 import s3fs
 import pandas as pd
 import pyarrow as pa
@@ -111,7 +112,7 @@ class S3FetchParq:
         self._filters = filters
 
     def _key_path(self):
-        return '/'.join([self._prefix,self._dataset])
+        return '/'.join([self._prefix,self._dataset]).strip('/')
 
     def fetch(self):
         ''' Access function to kick off all bits and return result. '''
@@ -131,7 +132,6 @@ class S3FetchParq:
             partition_values, partition_types)
 
         filtered_paths = self._set_filtered_prefix_list(typed_values)
-
         return self._get_filtered_data(bucket=bucket, paths=filtered_paths)
 
     def _get_partitions_and_types(self, first_file_key: str):
@@ -211,7 +211,7 @@ class S3FetchParq:
                     parsed_parts[part] = set(map(float, values))
                 elif part_type == 'datetime':
                     parsed_parts[part] = set(
-                        map(datetime.fromisoformat, values))
+                        map(datetime.datetime.fromisoformat, values))
                 elif part_type == 'bool':
                     parsed_parts[part] = set(map(bool, values))
             except:
@@ -263,8 +263,21 @@ class S3FetchParq:
     def _get_filtered_data(self, bucket: str, paths: list)->pd.DataFrame:
         ''' Pull all filtered parquets down and return a dataframe.
         '''
-        temp_queue = mp.Queue()
+        
         temp_frames = []
+
+        def append_to_temp(frame):
+            temp_frames.append(frame)
+
+        with get_context("spawn").Pool() as pool:
+            for path in paths:
+                append_to_temp(pool.apply_async(self._s3_parquet_to_dataframe, args = (bucket,path,)).get())
+            pool.close()
+            pool.join()
+
+        '''
+        mp.get_context('spawn')
+        temp_queue = mp.Queue()
         threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(
             bucket, path, temp_queue,)) for path in paths]
         for thread in threads:
@@ -273,10 +286,10 @@ class S3FetchParq:
 
         for thread in threads:
             thread.join()
-
+        '''
         return pd.concat(temp_frames)
 
-    def _s3_parquet_to_dataframe(self, bucket: str, path: str, destination: list)->None:
+    def _s3_parquet_to_dataframe(self, bucket: str, path: str)->None:
         """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
         s3 = s3fs.S3FileSystem()
         uri = f"{bucket}/{path}"
@@ -285,7 +298,7 @@ class S3FetchParq:
         partitions = self._repopulate_partitions(uri)
         for k, v in partitions.items():
             frame[k] = v
-        destination.put(frame)
+        return frame
 
     def _repopulate_partitions(self, partition_string: str)->tuple:
         """ for each val in the partition string creates a list that can be added back into the dataframe"""
