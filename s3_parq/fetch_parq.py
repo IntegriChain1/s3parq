@@ -68,6 +68,7 @@ class S3FetchParq:
     def __init__(self, bucket: str, prefix: str, dataset: str, filters: List[type(Filter)]) -> None:
         self.bucket = bucket
         self.prefix = prefix
+        self._original_prefix = prefix
         self.dataset = dataset
         self.filters = filters
 
@@ -90,6 +91,16 @@ class S3FetchParq:
     @prefix.setter
     def prefix(self, prefix: str) -> None:
         self._prefix = prefix
+
+    @property
+    def dataset(self) -> str:
+        return self.dataset
+
+    @dataset.setter
+    def dataset(self, dataset: str) -> None:
+        prefix = self._prefix
+        self._dataset = dataset
+        self._prefix = self._original_prefix + "/" + dataset
 
     @property
     def filters(self):

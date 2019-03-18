@@ -19,7 +19,7 @@ class Test():
         dummy_init_params = {
             "bucket": "fake-bucket",
             "prefix": "fake-prefix",
-            "dataset": "dake-dataset",
+            "dataset": "fake-dataset",
             "filters": [{
                 "partition": "fake-partition",
                 "comparison": "==",
@@ -41,6 +41,16 @@ class Test():
 
         with pytest.raises(TypeError):
             bad_fetch = S3FetchParq(bucket="just-a-bucket")
+
+    # Test that dataset is just popped onto the prefix
+    def test_dataset_addition(self):
+        good_fetch = S3FetchParq(**self.setup_dummy_params())
+
+        assert good_fetch.prefix == "fake-prefix/fake-dataset"
+
+        good_fetch.dataset = "new-fake-dataset"
+
+        assert good_fetch.prefix == "fake-prefix/new-fake-dataset"
 
     # Test that if inapropriate filters are passed it'll be denied
     def test_invalid_filters(self):
