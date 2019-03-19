@@ -14,8 +14,7 @@ class S3Parq:
                 bucket: str,
                 key: str,
                 dataframe: pd.DataFrame,
-                partitions: Iterable[str]
-                ) -> None:
+                partitions: Iterable[str]) -> None:
         pub = S3PublishParq(
             dataframe=dataframe,
             bucket=bucket,
@@ -28,7 +27,7 @@ class S3Parq:
               key: str,
               **kwargs
               ) -> None:
-        fetch(key=key,
-              bucket=bucket,
-              filters=kwargs.get('partitions', dict())
-              )
+        return fetch(key=key,
+                     bucket=bucket,
+                     filters=kwargs.get('partitions', dict())
+                     )
