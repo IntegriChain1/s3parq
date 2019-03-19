@@ -25,7 +25,14 @@ class S3NamingHelper:
 
         return tuple([True, None])
 
-    def validate_bucket_name(self, bucket_name: str) -> tuple:
+    def validate_bucket_name(self, bucket_name: str):
+        result, message = self._validate_bucket_name(bucket_name)
+        if result:
+            return result
+        else:
+            raise ValueError(message)
+
+    def _validate_bucket_name(self, bucket_name: str) -> tuple:
         ''' INTENT: checks for a valid bucket name
             ARGS: 
                 - bucket_name (str) the bucket name to validate
@@ -48,11 +55,11 @@ class S3NamingHelper:
 
         # cannot consecutive periods
         elif '..' in bucket_name:
-            return tuple([False, 'bucket name cannot include double periods'])
+            return (False, 'bucket name cannot include double periods')
 
         # dashes next to periods
         elif '.-' in bucket_name or '-.' in bucket_name:
-            return tuple([False, 'bucket name cannot have dashes next to periods'])
+            return (False, 'bucket name cannot have dashes next to periods')
 
         # char or number after period
         elif bool(re.search(r"\.[^0-9a-z]*", bucket_name)):
@@ -64,7 +71,7 @@ class S3NamingHelper:
         else:
             return tuple([True, None])
 
-    def validate_s3_path(self, path: str)->tuple:
+    def validate_s3_path(self, path: str) -> tuple:
         ''' INTENT: validate a complete s3 path
             ARGS:
                 - path (str) the S3 path to validate
@@ -75,17 +82,18 @@ class S3NamingHelper:
 
         path_parts = path[5:].split('/')
 
-        bucket_validity = self.validate_bucket_name(path_parts[0])
+        bucket_validity = self._validate_bucket_name(path_parts[0])
 
         if not bucket_validity[0]:
             return tuple([False, bucket_validity[1]])
 
-        for part in path_parts:
+        for part in path_parts[1:]:
             part_validity = self.validate_part(part)
             if not part_validity[0]:
                 return tuple([False, part_validity[1]])
 
         return tuple([True, path])
+
 
     def _safe_chars(self) -> list:
         safe = list(range(ord('a'), ord('z')+1))
