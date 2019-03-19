@@ -12,7 +12,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from .s3_naming_helper import S3NamingHelper
 
-
 ''' S3 Parquet to Dataframe Fetcher.
 This class handles the portion of work that will return a concatenated 
 dataframe based on the partition filters the specified dataset.
@@ -72,6 +71,7 @@ Phase 3:
     Concat dataframes and return
 '''
 
+
 def fetch(bucket: str, key: str, filters: List[type(Filter)]):
     ''' Access function to kick off all bits and return result. '''
     _validate_filter_rules(filters)
@@ -102,6 +102,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)]):
 
     return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata)
 
+
 def _get_partitions_and_types(first_file_key: str, bucket):
     ''' Fetch a list of all the partitions actually there and their 
     datatypes. List may be different than passed list if not being used
@@ -124,6 +125,7 @@ def _get_partitions_and_types(first_file_key: str, bucket):
 
     return partition_metadata
 
+
 def _get_all_files_list(bucket, key) -> list:
     ''' Get a list of all files to get all partitions values.
     Necesarry to catch all partition values for non-filtered partiions.
@@ -140,6 +142,7 @@ def _get_all_files_list(bucket, key) -> list:
                 objects_in_bucket.append(item['Key'])
 
     return objects_in_bucket
+
 
 def _parse_partitions_and_values(file_paths: List[str], key: str) -> dict:
     ''' Take the list of all the file keys and return a dict of the
@@ -164,12 +167,13 @@ def _parse_partitions_and_values(file_paths: List[str], key: str) -> dict:
 
     return parts
 
+
 def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
     ''' Convert the collected values to their python data types for use.
     '''
     for part, values in parsed_parts.items():
         part_type = part_types[part]
-        #try:
+        # try:
         if (part_type == 'string') or (part_type == 'category'):
             continue
         elif part_type == 'int':
@@ -181,11 +185,12 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
                 map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
         elif part_type == 'bool':
             parsed_parts[part] = set(map(bool, values))
-        #except:
+        # except:
         #    raise ValueError(
         #        f"Invalid partition type: {part_type} does not match partition {part}")
 
     return parsed_parts
+
 
 # TODO: Neaten up?
 def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
@@ -226,6 +231,7 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
     # TODO: fix the below mess with random array
     return filter_keys[0]
 
+
 def _get_filtered_data(bucket: str, paths: list, partition_metadata) -> pd.DataFrame:
     ''' Pull all filtered parquets down and return a dataframe.
     '''
@@ -236,15 +242,15 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata) -> pd.DataF
         temp_frames.append(frame)
 
     for path in paths:
-        print(f"path is: {path}")
         append_to_temp(_s3_parquet_to_dataframe(bucket, path, partition_metadata))
-    #with get_context("spawn").Pool() as pool:
+    # with get_context("spawn").Pool() as pool:
     #    for path in paths:
     #        append_to_temp(
     #            pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
     #    pool.close()
     #    pool.join()
     return pd.concat(temp_frames)
+
 
 def _s3_parquet_to_dataframe(bucket: str, key: str, partition_metadata) -> pd.DataFrame:
     """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
@@ -257,6 +263,7 @@ def _s3_parquet_to_dataframe(bucket: str, key: str, partition_metadata) -> pd.Da
         frame[k] = v
     return frame
 
+
 def _repopulate_partitions(partition_string: str, partition_metadata) -> tuple:
     """ for each val in the partition string creates a list that can be added back into the dataframe"""
     raw = partition_string.split('/')
@@ -267,11 +274,9 @@ def _repopulate_partitions(partition_string: str, partition_metadata) -> tuple:
             partitions[k] = v
 
     for key, val in partitions.items():
-        #try
-        print(partition_metadata)
+        # try
         dtype = partition_metadata[key]
-
-        #except:
+        # except:
         #    raise ValueError(
         #        f"{key} is not a recognized partition in the current s3 meta.")
         if dtype == 'string':
@@ -288,6 +293,7 @@ def _repopulate_partitions(partition_string: str, partition_metadata) -> tuple:
         elif dtype == 'bool':
             partitions[key] = bool(val)
     return partitions
+
 
 def _validate_filter_rules(filters: List[type(Filter)]) -> None:
     ''' Validate that the filters are the correct format and follow basic
@@ -310,6 +316,7 @@ def _validate_filter_rules(filters: List[type(Filter)]) -> None:
         elif (f["comparison"] in single_value_comparisons) & (len(f["values"]) != 1):
             raise ValueError(
                 f"Comparison {f['comparison']} can only be used with one filter value.")
+
 
 def _validate_matching_filter_data_type(part_types, filters) -> None:
     ''' Validate that the filters passed are matching to the partitions'

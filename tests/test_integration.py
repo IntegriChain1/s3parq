@@ -37,7 +37,6 @@ def test_end_to_end():
     )
 
     # go get it
-
     dataframe = fetch(
         bucket=bucket_name,
         key=key,
@@ -46,5 +45,4 @@ def test_end_to_end():
 
     assert dataframe.shape == df.dataframe.shape
     pd.DataFrame.eq(dataframe, df.dataframe)
-
-    
+    dataframe.head()
