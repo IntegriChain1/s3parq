@@ -2,7 +2,7 @@ import pytest
 from dfmock import DFMock
 import boto3
 from moto import mock_s3
-import s3_parq.publish_parq as pub_parq
+import s3parq.publish_parq as pub_parq
 
 # generates single partition path files of compressed size ~60mb
 

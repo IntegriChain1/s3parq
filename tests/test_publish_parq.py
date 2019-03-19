@@ -7,7 +7,7 @@ import boto3
 from string import ascii_lowercase
 import random
 from dfmock import DFMock
-import s3_parq.publish_parq as parq
+import s3parq.publish_parq as parq
 import s3fs
 from moto import mock_s3
     

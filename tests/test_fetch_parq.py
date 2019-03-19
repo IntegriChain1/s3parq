@@ -8,10 +8,10 @@ from dfmock import DFMock
 from collections import OrderedDict
 
 from .mock_helper import MockHelper
-from s3_parq.fetch_parq import _get_all_files_list, _parse_partitions_and_values, _get_partitions_and_types, _get_partition_value_data_types
-from s3_parq.fetch_parq import _validate_matching_filter_data_type, _get_filtered_key_list, _s3_parquet_to_dataframe
-from s3_parq.fetch_parq import *
-from s3_parq.publish_parq import publish
+from s3parq.fetch_parq import _get_all_files_list, _parse_partitions_and_values, _get_partitions_and_types, _get_partition_value_data_types
+from s3parq.fetch_parq import _validate_matching_filter_data_type, _get_filtered_key_list, _s3_parquet_to_dataframe
+from s3parq.fetch_parq import *
+from s3parq.publish_parq import publish
 
 from typing import Dict
 

@@ -3,8 +3,8 @@ import moto
 import s3_parq
 import pytest
 import dfmock
-from s3_parq.publish_parq import publish
-from s3_parq.fetch_parq import fetch
+from s3parq.publish_parq import publish
+from s3parq.fetch_parq import fetch
 import pandas as pd
 
 @moto.mock_s3
