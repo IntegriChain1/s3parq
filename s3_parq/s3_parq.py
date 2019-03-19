@@ -6,6 +6,40 @@ import sys
 import logging
 
 
+
+
+
+class S3Parq:
+
+    def publish(self,
+                bucket:str, 
+                dataset:str,
+                dataframe:pd.DataFrame,
+                **kwargs
+                    )->None:
+        pub = S3PulishParq( dataset= dataset,
+                            dataframe= dataframe,
+                            bucket = bucket,
+                            prefix = kwargs.get('prefix',''),
+                            partitions = kwargs.get('partitions','')
+                          )
+        pub.publish()                     
+    
+
+    def fetch(  bucket:str, 
+                dataset:str,
+                **kwargs
+                    )->None:
+        fetch = S3FetchParq( dataset= dataset,
+                            dataframe= dataframe,
+                            bucket = bucket,
+                            prefix = kwargs.get('prefix',''),
+                            filters = kwargs.get('partitions',dict())
+                          )
+        fetch.fetch()
+
+"""
+
 class S3Parq:
 
     def __init__(self, **kwargs):
@@ -101,9 +135,9 @@ class S3Parq:
         self._prefix = prefix
 
     def _check_required_attr(self, attributes: iter)->None:
-        """ make sure all required attributes are set before running.
+        ''' make sure all required attributes are set before running.
             The sys._getframe bit is the name of the calling function (in this case S3Parq.fetch / S3Parq.publish).
-        """
+        '''
         for required_attr in attributes:
             if not hasattr(self, required_attr):
                 fail_message = f"Unable to call S3Parq.{sys._getframe(1).f_code.co_name}; missing required attribute {required_attr}"
@@ -111,7 +145,7 @@ class S3Parq:
                 raise ValueError(fail_message)
 
     def _type_check_attr(self, attr: str, value)->None:
-        """ checks typing of attribute and throws error if it is incorrect."""
+        ''' checks typing of attribute and throws error if it is incorrect.'''
         for k in [('dataset', str,),
                   ('bucket', str,),
                   ('prefix', str,),
@@ -125,7 +159,8 @@ class S3Parq:
                     raise TypeError(fail_message)
 
     def _set_kwargs_as_attrs(self, **kwargs)->None:
-        """ type check and set instance attributes."""
+        '''type check and set instance attributes.'''
         for key in kwargs.keys():
             self._type_check_attr(key, kwargs[key])
             self.__dict__["_"+key] = kwargs[key]
+"""
