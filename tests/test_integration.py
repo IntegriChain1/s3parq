@@ -39,7 +39,8 @@ def test_end_to_end():
     # go get it
     dataframe = fetch(
         bucket=bucket_name,
-        key=key
+        key=key,
+        parallel=False
     )
 
     assert dataframe.shape == df.dataframe.shape
