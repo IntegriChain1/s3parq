@@ -275,9 +275,7 @@ def _repopulate_partitions(partition_string: str, partition_metadata) -> tuple:
 
     for key, val in partitions.items():
         # try
-        print(partition_metadata)
         dtype = partition_metadata[key]
-
         # except:
         #    raise ValueError(
         #        f"{key} is not a recognized partition in the current s3 meta.")
