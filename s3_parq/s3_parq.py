@@ -1,5 +1,5 @@
 import boto3
-from .publish_parq import S3PublishParq
+from s3_parq.publish_parq import publish
 from s3_parq.fetch_parq import fetch
 
 import pandas as pd
@@ -15,7 +15,7 @@ class S3Parq:
                 key: str,
                 dataframe: pd.DataFrame,
                 partitions: Iterable[str]) -> None:
-        pub = S3PublishParq(
+        pub = publish(
             dataframe=dataframe,
             bucket=bucket,
             key=key,
