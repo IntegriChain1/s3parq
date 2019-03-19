@@ -18,8 +18,7 @@ class Test():
     def setup_dummy_params(self):
         dummy_init_params = {
             "bucket": "fake-bucket",
-            "prefix": "fake-prefix",
-            "dataset": "fake-dataset",
+            "key": "fake-key",
             "filters": [{
                 "partition": "fake-partition",
                 "comparison": "==",
@@ -35,29 +34,18 @@ class Test():
         - Fetches partitions and associated data
     '''
 
-    # Test requires bucket, prefix, filters
+    # Test requires bucket, key, filters
     def test_requires_params(self):
         good_fetch = S3FetchParq(**self.setup_dummy_params())
 
         with pytest.raises(TypeError):
             bad_fetch = S3FetchParq(bucket="just-a-bucket")
 
-    # Test that dataset is just popped onto the prefix
-    def test_dataset_addition(self):
-        good_fetch = S3FetchParq(**self.setup_dummy_params())
-
-        assert good_fetch._key_path() == "fake-prefix/fake-dataset"
-
-        good_fetch.dataset = "new-fake-dataset"
-
-        assert good_fetch._key_path() == "fake-prefix/new-fake-dataset"
-
     # Test that if inapropriate filters are passed it'll be denied
     def test_invalid_filters(self):
         inv_fil_params = {
             "bucket": "fake-bucket",
-            "prefix": "fake-prefix",
-            "dataset": "dake-dataset",
+            "key": "fake-key",
             "filters": [{
                 "comparison": "==",
                 "values": ["fake-value"]
@@ -76,48 +64,46 @@ class Test():
         with pytest.raises(ValueError):
             bad_fetch = S3FetchParq(**inv_fil_params)
 
-    # Test that all files matching prefix gets listed out
-
+    # Test that all files matching key gets listed out
     def test_fetch_files_list(self):
         mh = MockHelper(count=100, s3=False, files=True)
         uploaded = mh.file_ops
 
         fetcher = S3FetchParq(**self.setup_dummy_params())
         fetcher.bucket = uploaded['bucket']
-        fetcher.dataset = uploaded['dataset']
-        fetcher.prefix = uploaded['prefix']
+        fetcher.key = uploaded['key']
         test_files = uploaded['files']
 
         fetched_files = fetcher._get_all_files_list()
        
-        test_files_prefixed = list(
-            map(lambda x: fetcher._key_path() + x, test_files))
+        test_files_keyed = list(
+            map(lambda x: fetcher.key + x, test_files))
 
-        assert (test_files_prefixed.sort()) == (fetched_files.sort())
+        assert (test_files_keyed.sort()) == (fetched_files.sort())
 
-    # Test that all files matching prefix get listed out even with pagination
+    # Test that all files matching key get listed out even with pagination
     # def test_fetch_files_list_more_than_1k(self):
     #     mh = MockHelper(count=1500, s3=False, files=True)
     #     uploaded = mh.file_ops
 
     #     fetcher = S3FetchParq(**self.setup_dummy_params())
     #     fetcher.s3_bucket = uploaded['bucket']
-    #     fetcher.s3_prefix = uploaded['prefix']
+    #     fetcher.s3_key = uploaded['key']
     #     test_files = uploaded['files']
 
     #     fetched_files = fetcher._get_all_files_list()
-    #     test_files_prefixed = list(map(lambda x: fetcher.s3_prefix + x, test_files))
+    #     test_files_keyed = list(map(lambda x: fetcher.s3_key + x, test_files))
 
-    #     assert (test_files_prefixed.sort()) == (fetched_files.sort())
+    #     assert (test_files_keyed.sort()) == (fetched_files.sort())
 
     # Test that all valid partitions are correctly parsed
     def test_get_partitions(self):
         parts = [
-            "fake-prefix/fake-dataset/fil-1=1/fil-2=2/fil-3=str/rngf1.parquet",
-            "fake-prefix/fake-dataset/fil-1=1/fil-2=2/fil-3=rng-str/rngf2.parquet",
-            "fake-prefix/fake-dataset/fil-1=1/fil-2=4/fil-3=str_rng/rngf3.parquet",
-            "fake-prefix/fake-dataset/fil-1=5/fil-2=2/fil-3=str/rngf4.parquet",
-            "fake-prefix/fake-dataset/fil-1=5/fil-2=4/fil-3=99/rngf5.parquet"
+            "fake-key/fil-1=1/fil-2=2/fil-3=str/rngf1.parquet",
+            "fake-key/fil-1=1/fil-2=2/fil-3=rng-str/rngf2.parquet",
+            "fake-key/fil-1=1/fil-2=4/fil-3=str_rng/rngf3.parquet",
+            "fake-key/fil-1=5/fil-2=2/fil-3=str/rngf4.parquet",
+            "fake-key/fil-1=5/fil-2=4/fil-3=99/rngf5.parquet"
         ]
         parsed_parts = OrderedDict({
             "fil-1": {
@@ -146,17 +132,17 @@ class Test():
     # Test that if no partitions are present it'll handle without imploding
     def test_get_partitions_none(self):
         parts = [
-            "prefix/rngf1.parc",
-            "prefix/rngf2.parc",
-            "prefix/rngf3.parc",
-            "prefix/rngf4.parc",
-            "prefix/rngf5.parc"
+            "key/rngf1.parc",
+            "key/rngf2.parc",
+            "key/rngf3.parc",
+            "key/rngf4.parc",
+            "key/rngf5.parc"
         ]
         parsed_parts = OrderedDict({})
 
         dummy_params = self.setup_dummy_params()
         fetcher = S3FetchParq(**dummy_params)
-        fetcher.s3_prefix = "prefix/"
+        fetcher.s3_key = "key/"
 
         test_parsed_part = fetcher._parse_partitions_and_values(parts)
 
@@ -330,15 +316,15 @@ class Test():
         }]
 
         fil_paths = [
-            'fake-prefix/fil-1=5.45/fil-2=2/fil-3=str/'
+            'fake-key/fil-1=5.45/fil-2=2/fil-3=str/'
         ]
 
         params = self.setup_dummy_params()
-        params["prefix"] = "fake-prefix/"
+        params["key"] = "fake-key/"
         params["filters"] = filters
 
         fetcher = S3FetchParq(**params)
-        filter_paths = fetcher._set_filtered_prefix_list(
+        filter_paths = fetcher._set_filtered_key_list(
             typed_parts=typed_parts)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
@@ -374,18 +360,18 @@ class Test():
         }]
 
         fil_paths = [
-            'fake-prefix/fil-1=5.45/fil-2=2/fil-3=99/',
-            'fake-prefix/fil-1=5.45/fil-2=2/fil-3=str/',
-            'fake-prefix/fil-1=5.45/fil-2=2/fil-3=rng-str/',
-            'fake-prefix/fil-1=5.45/fil-2=2/fil-3=str_rng/'
+            'fake-key/fil-1=5.45/fil-2=2/fil-3=99/',
+            'fake-key/fil-1=5.45/fil-2=2/fil-3=str/',
+            'fake-key/fil-1=5.45/fil-2=2/fil-3=rng-str/',
+            'fake-key/fil-1=5.45/fil-2=2/fil-3=str_rng/'
         ]
 
         params = self.setup_dummy_params()
-        params["prefix"] = "fake-prefix/"
+        params["key"] = "fake-key/"
         params["filters"] = filters
 
         fetcher = S3FetchParq(**params)
-        filter_paths = fetcher._set_filtered_prefix_list(
+        filter_paths = fetcher._set_filtered_key_list(
             typed_parts=typed_parts)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
@@ -421,11 +407,11 @@ class Test():
         fil_paths = []
 
         params = self.setup_dummy_params()
-        params["prefix"] = "fake-prefix"
+        params["key"] = "fake-key"
         params["filters"] = filters
 
         fetcher = S3FetchParq(**params)
-        filter_paths = fetcher._set_filtered_prefix_list(
+        filter_paths = fetcher._set_filtered_key_list(
             typed_parts=typed_parts)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
@@ -449,7 +435,7 @@ class Test():
     def test_s3_parquet_to_dataframe(self):
         mock = MockHelper(count=500, s3=True)
         fetch = S3FetchParq(bucket=mock.s3_bucket,
-                            prefix='', dataset='', filters={})
+                            key='', filters={})
         fetch._partition_metadata = mock.partition_metadata
         path = '/'.join(mock.paths[0].split('/')[:-1])
         response = fetch._s3_parquet_to_dataframe(

@@ -19,9 +19,8 @@ class S3FetchParq:
     dataframe based on the partition filters the specified dataset.
 
     Required kwargs:
-        s3_bucket (str): S3 Bucket name
-        prefix (str): Prefix that leads to the desired Dataset
-        dataset (str): The actual Dataset
+        bucket (str): S3 Bucket name
+        key (str): S3 key that leads to the desired dataset
         filters (List(Filter)): filters to be applied to the Dataset Partitions
             Filters have the fields:
                 partition (str):
@@ -51,7 +50,7 @@ class S3FetchParq:
 
     ''' TODO: development notes, remove after
     Internal attributes:
-        List of prefixes for the filtered dataset
+        List of keys for the filtered dataset
         List of local files pulled from above
         List of dataframes
 
@@ -67,10 +66,9 @@ class S3FetchParq:
         Concat dataframes and return
     '''
 
-    def __init__(self, bucket: str, dataset: str, prefix: str, filters: List[type(Filter)]) -> None:
+    def __init__(self, bucket: str, key: str, filters: List[type(Filter)]) -> None:
         self.bucket = bucket
-        self.dataset = dataset
-        self.prefix = prefix
+        self.key = key
         self.filters = filters
 
     @property
@@ -86,20 +84,12 @@ class S3FetchParq:
             raise ValueError(validater[1])
 
     @property
-    def prefix(self) -> str:
-        return self._prefix
+    def key(self) -> str:
+        return self._key
 
-    @prefix.setter
-    def prefix(self, prefix: str) -> None:
-        self._prefix = prefix
-
-    @property
-    def dataset(self) -> str:
-        return self.dataset
-
-    @dataset.setter
-    def dataset(self, dataset: str) -> None:
-        self._dataset = dataset
+    @key.setter
+    def key(self, key: str) -> None:
+        self._key = key
         
     @property
     def filters(self):
@@ -111,14 +101,11 @@ class S3FetchParq:
 
         self._filters = filters
 
-    def _key_path(self):
-        return '/'.join([self._prefix,self._dataset])
-
     def fetch(self):
         ''' Access function to kick off all bits and return result. '''
 
         bucket = self._bucket
-        prefix = self._key_path()
+        key = self._key
 
         all_files = self._get_all_files_list()
 
@@ -131,7 +118,7 @@ class S3FetchParq:
         typed_values = self._set_partition_value_data_types(
             partition_values, partition_types)
 
-        filtered_paths = self._set_filtered_prefix_list(typed_values)
+        filtered_paths = self._set_filtered_key_list(typed_values)
         return self._get_filtered_data(bucket=bucket, paths=filtered_paths)
 
     def _get_partitions_and_types(self, first_file_key: str):
@@ -164,8 +151,8 @@ class S3FetchParq:
         objects_in_bucket = []
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects')
-        operation_parameters = {'Bucket': self._bucket,
-                                'Prefix': self._key_path()}
+        operation_parameters = {'Bucket': self.bucket,
+                                'Prefix': self.key}
         page_iterator = paginator.paginate(**operation_parameters)
         for page in page_iterator:
             for item in page['Contents']:
@@ -180,10 +167,10 @@ class S3FetchParq:
         '''
         # TODO: find more neat/efficient way to do this
         parts = OrderedDict()
-        prefix_len = len(self._key_path())
+        key_len = len(self.key)
         for file_path in file_paths:
-            # Delete prefix, split the parts out, delete the file name
-            file_path = file_path[prefix_len:]
+            # Delete key, split the parts out, delete the file name
+            file_path = file_path[key_len:]
             unparsed_parts = file_path.split("/")
             del unparsed_parts[-1]
 
@@ -221,7 +208,7 @@ class S3FetchParq:
         return parsed_parts
 
     # TODO: Neaten up?
-    def _set_filtered_prefix_list(self, typed_parts: dict)->List[str]:
+    def _set_filtered_key_list(self, typed_parts: dict)->List[str]:
         ''' Create list of all "paths" to files after the filtered partitions
         are set ie all non-matching partitions are excluded.
         '''
@@ -255,7 +242,7 @@ class S3FetchParq:
             else:
                 filter_keys.append(previous_fil_keys)
 
-        construct_paths(typed_parts, [self._key_path()])
+        construct_paths(typed_parts, [self._key])
 
         # TODO: fix the below mess with random array
         return filter_keys[0]

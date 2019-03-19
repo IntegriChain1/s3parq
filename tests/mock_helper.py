@@ -109,9 +109,7 @@ class MockHelper:
         return self._s3_bucket
 
     def setup_files_list(self, count=1500):
-        prefix = self.random_name()
-        dataset = self.random_name()
-        key_path = '/'.join([prefix,dataset])
+        key = self.random_name()
         bucket_name = self.random_name()
         temp_file_names = []
         s3_client = boto3.client('s3')
@@ -124,12 +122,11 @@ class MockHelper:
                 temp_file_names.append(str(tail))
                 with open(t.name, 'rb') as data:
                     s3_client.upload_fileobj(
-                        data, Bucket=bucket_name, Key=(key_path+tail))
+                        data, Bucket=bucket_name, Key=(key+tail))
 
         retrieval_ops = {
             "bucket": bucket_name,
-            "prefix": prefix,
-            "dataset": dataset,
+            "key": key,
             "files": temp_file_names
         }
 
