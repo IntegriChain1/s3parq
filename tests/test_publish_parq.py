@@ -146,6 +146,6 @@ class Test:
                       "bool_col": "boolean", "grouped_col": {"option_count": 4, "option_type": "string"}}
         df.generate_dataframe()
 
-        with pyest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError):
             parq = pub_parq.S3PublishParq(
                 dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], prefix='')
