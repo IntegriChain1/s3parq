@@ -4,6 +4,7 @@ import s3_parq
 import pytest
 import dfmock
 from s3_parq.fetch_parq import fetch
+import pandas as pd
 
 @moto.mock_s3
 def test_end_to_end():
@@ -44,3 +45,6 @@ def test_end_to_end():
     )
 
     assert dataframe.shape == df.dataframe.shape
+    pd.DataFrame.eq(dataframe, df.dataframe)
+
+    
