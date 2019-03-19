@@ -25,7 +25,14 @@ class S3NamingHelper:
 
         return tuple([True, None])
 
-    def validate_bucket_name(self, bucket_name: str) -> tuple:
+    def validate_bucket_name(self, bucket_name: str):
+        result, message = self._validate_bucket_name(bucket_name)
+        if result:
+            return result
+        else:
+            raise ValueError(message)
+
+    def _validate_bucket_name(self, bucket_name: str) -> tuple:
         ''' INTENT: checks for a valid bucket name
             ARGS: 
                 - bucket_name (str) the bucket name to validate
@@ -86,6 +93,7 @@ class S3NamingHelper:
                 return tuple([False, part_validity[1]])
 
         return tuple([True, path])
+
 
     def _safe_chars(self) -> list:
         safe = list(range(ord('a'), ord('z')+1))
