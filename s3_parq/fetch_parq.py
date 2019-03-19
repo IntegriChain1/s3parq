@@ -72,7 +72,7 @@ Phase 3:
 '''
 
 
-def fetch(bucket: str, key: str, filters: List[type(Filter)]):
+def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: bool = True):
     ''' Access function to kick off all bits and return result. '''
     _validate_filter_rules(filters)
     S3NamingHelper().validate_bucket_name(bucket)
@@ -100,7 +100,8 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)]):
                 files_to_load.append(file)
                 continue
 
-    return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata)
+    return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata,
+                              parallel=parallel)
 
 
 def _get_partitions_and_types(first_file_key: str, bucket):
@@ -232,7 +233,7 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
     return filter_keys[0]
 
 
-def _get_filtered_data(bucket: str, paths: list, partition_metadata) -> pd.DataFrame:
+def _get_filtered_data(bucket: str, paths: list, partition_metadata, parallel=True) -> pd.DataFrame:
     ''' Pull all filtered parquets down and return a dataframe.
     '''
 
@@ -242,13 +243,16 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata) -> pd.DataF
         temp_frames.append(frame)
 
     for path in paths:
-        append_to_temp(_s3_parquet_to_dataframe(bucket, path, partition_metadata))
-    # with get_context("spawn").Pool() as pool:
-    #    for path in paths:
-    #        append_to_temp(
-    #            pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
-    #    pool.close()
-    #    pool.join()
+        if parallel:
+            with get_context("spawn").Pool() as pool:
+                for path in paths:
+                    append_to_temp(
+                        pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
+                pool.close()
+                pool.join()
+        else:
+            append_to_temp(_s3_parquet_to_dataframe(bucket, path, partition_metadata))
+
     return pd.concat(temp_frames)
 
 
