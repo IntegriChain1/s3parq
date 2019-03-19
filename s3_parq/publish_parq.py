@@ -28,6 +28,14 @@ class S3PublishParq:
 
     @dataset.setter
     def dataset(self, dataset: str)->None:
+        
+    def test_not_implemented_timedelta(self):
+        df = DFMock(count=100)
+        df.columns = {"time": "timedelta", "stringer": "string"}
+        df.generate_dataframe()
+        parq = S3Parq()
+        with pytest.raises(NotImplementedError):
+            parq.dataframe = df.dataframe
         self._dataset = dataset
 
     @property
