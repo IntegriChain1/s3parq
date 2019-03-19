@@ -64,7 +64,7 @@ class S3NamingHelper:
         else:
             return tuple([True, None])
 
-    def validate_s3_path(self, path: str)->tuple:
+    def validate_s3_path(self, path: str) -> tuple:
         ''' INTENT: validate a complete s3 path
             ARGS:
                 - path (str) the S3 path to validate

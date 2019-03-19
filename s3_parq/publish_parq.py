@@ -5,7 +5,7 @@ import pyarrow.parquet as pq
 import s3fs
 import sys
 import logging
-
+from typing import List
 
 class S3PublishParq:
     def __init__(self,
@@ -14,10 +14,59 @@ class S3PublishParq:
                  key: str,
                  partitions: iter) -> None:
         self.logger = logging.getLogger(__name__)
+        self.dataframe = dataframe
+        self.bucket = bucket
+        self.key = key
+        self.partitions = partitions
 
+    @property
+    def dataset(self) -> str:
+        return self._dataset
+
+    @dataset.setter
+    def dataset(self, dataset: str) -> None:
+        self._dataset = dataset
+
+    @property
+    def dataframe(self) -> pd.DataFrame:
+        return self._dataframe
+
+    @dataframe.setter
+    def dataframe(self, dataframe: pd.DataFrame) -> None:
+        dtypes = set(dataframe.columns)
+        for dtype in dtypes:
+            if 'timedelta' in dtype:
+                raise NotImplementedError(
+                    f"Pyarrow does not support parquet conversion of timedelta columns at this time.")
+
+        self._dataframe = dataframe
+
+    @property
+    def bucket(self) -> str:
+        return self._bucket
+
+    @bucket.setter
+    def bucket(self, bucket: str) -> None:
+        self._bucket = bucket
+
+    @property
+    def prefix(self) -> str:
+        return self._prefix
+
+    @prefix.setter
+    def prefix(self, prefix: str) -> None:
+        self._prefix = prefix
+
+    @property
+    def partitions(self) -> iter:
+
+        return self._partitions
+
+    @partitions.setter
+    def partitions(self, partitions: iter) -> None:
         self.logger.debug("Checking partition args...")
         for partition in partitions:
-            if partition not in dataframe.columns.tolist():
+            if partition not in self._dataframe.columns.tolist():
                 partition_message = f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe."
                 self.logger.critical(partition_message)
                 raise ValueError(partition_message)
@@ -26,13 +75,19 @@ class S3PublishParq:
                 self.logger.critical(partition_message)
                 raise ValueError(partition_message)
         self.logger.debug("Done checking partitions.")
+        self._partitions = partitions
+
+    def publish(self) -> None:
         self.logger.debug("Begin writing to S3..")
-        for frame in self._sized_dataframes(dataframe):
-            self._gen_parquet_to_s3(bucket=bucket, key=key,
-                                    dataframe=frame, partitions=partitions)
-            self._assign_partition_meta(
-                bucket=bucket, key=key, dataframe=frame)
+        files = []
+        for frame in self._sized_dataframes(self.dataframe):
+            self._gen_parquet_to_s3(bucket=self.bucket, key=self.key,
+                                    dataframe=self.dataframe, partitions=self.partitions)
+            published_files = self._assign_partition_meta(
+                bucket=self.bucket, key=self.key, dataframe=self.dataframe)
+            files = files + published_files
         self.logger.debug("Done writing to S3.")
+        return files
 
     def _check_partition_compatibility(self, partition: str) -> bool:
         """ Make sure each partition value is hive-allowed."""
@@ -88,7 +143,6 @@ ideal size: {ideal_size} bytes
         self.logger.info(f"sized out {len(sized_frames)} dataframes.")
         return tuple(sized_frames)
 
-
     def _s3_url(self, bucket: str, key: str):
         return '/'.join(["s3:/", bucket, key])
 
@@ -104,7 +158,7 @@ ideal size: {ideal_size} bytes
                             partition_cols=partitions, filesystem=s3fs.S3FileSystem())
         self.logger.debug("Done writing to location.")
 
-    def _assign_partition_meta(self, bucket: str, key: str, dataframe: pd.DataFrame) -> None:
+    def _assign_partition_meta(self, bucket: str, key: str, dataframe: pd.DataFrame) -> List[str]:
         """ assigns the dataset partition meta to all keys in the dataset"""
         s3_client = boto3.client('s3')
         all_files = []
@@ -119,6 +173,7 @@ ideal size: {ideal_size} bytes
                                       self._parse_dataframe_col_types(dataframe=dataframe)
                                   )}, MetadataDirective='REPLACE')
             self.logger.debug("Done appending metadata.")
+        return all_files
 
     def _parse_dataframe_col_types(self, dataframe: pd.DataFrame) -> dict:
         """ Returns a dict with the column names as keys, the data types (in strings) as values."""

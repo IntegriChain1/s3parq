@@ -32,6 +32,7 @@ class Test:
                                       partitions=overrides.get(
                                           'partitions', defaults['partitions'])
                                       )
+
     # accepts valid column names as partitions
 
     def test_accepts_valid_partitions(self):
@@ -76,8 +77,11 @@ class Test:
         partitions = df.dataframe.columns[:1].tolist()
         with patch('s3_parq.publish_parq.boto3', return_value=True) as mock_downstream_method:
             with patch('s3_parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
-                parq = self.publish_parq_setup(
-                    overrides={"dataframe": df.dataframe, "partitions": partitions})
+                partitions = df.dataframe.columns[:1]
+                key = "stub/stub"
+                parq = pub_parq.S3PublishParq(bucket='stub', dataframe=df.dataframe, key=key,
+                                              partitions=partitions)
+                parq.publish()
                 arg, kwarg = mock_method.call_args
                 assert kwarg['partition_cols'] == partitions
 
@@ -96,33 +100,53 @@ class Test:
         df.generate_dataframe()
 
         parq = pub_parq.S3PublishParq(dataframe=df.dataframe, key=key, bucket=bucket, partitions=[
-                                      'grouped_col'])
-        return tuple([bucket, key, df.dataframe])
+            'grouped_col'])
+        parq.publish()
+        return (bucket, key, df.dataframe)
 
     # correctly sets s3 metadata
     def test_metadata(self):
         bucket, key, dataframe = self.publish_mock()
         s3_client = boto3.client('s3')
+        print(s3_client.list_objects(Bucket=bucket))
         for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
             if obj['Key'].endswith(".parquet"):
                 meta = s3_client.get_object(
                     Bucket=bucket, Key=obj['Key'])['Metadata']
                 assert meta['partition_data_types'] == str(
                     {"str_col": "string",
-                        "int_col": "integer",
-                        "float_col": "float",
-                        "bool_col": "boolean",
-                        # "datetime_col":"datetime",
-                        "grouped_col": "string"
+                     "int_col": "integer",
+                     "float_col": "float",
+                     "bool_col": "boolean",
+                     # "datetime_col":"datetime",
+                     "grouped_col": "string"
                      })
 
     # generates valid parquet files identical to source df
     def test_generates_valid_parquet_files(self):
-
         bucket, key, dataframe = self.publish_mock()
         s3_path = f"s3://{bucket}/{key}"
+        s3_client = boto3.client('s3')
         from_s3 = pq.ParquetDataset(s3_path, filesystem=s3fs.S3FileSystem())
         s3pd = from_s3.read().to_pandas()
         pre_df = dataframe
         assert set(zip(s3pd.int_col, s3pd.str_col, s3pd.grouped_col)) - \
-            set(zip(pre_df.int_col, pre_df.str_col, pre_df.grouped_col)) == set()
+               set(zip(pre_df.int_col, pre_df.str_col, pre_df.grouped_col)) == set()
+
+
+    ## timedeltas no good
+    def test_timedeltas_rejected(self):
+        bucket = MockHelper().random_name()
+        key = MockHelper().random_name()
+
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket=bucket)
+
+        df = DFMock(count=100)
+        df.columns = {"timedelta_col": "timedelta", "int_col": "int", "float_col": "float",
+                      "bool_col": "boolean", "grouped_col": {"option_count": 4, "option_type": "string"}}
+        df.generate_dataframe()
+
+        with pytest.raises(NotImplementedError):
+            parq = pub_parq.S3PublishParq(
+                dataframe=df.dataframe, bucket=bucket, key=key, partitions=['grouped_col'])
