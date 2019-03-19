@@ -29,13 +29,18 @@ class S3PublishParq:
     @dataset.setter
     def dataset(self, dataset: str)->None:
         self._dataset = dataset
-
+   
     @property
     def dataframe(self)->pd.DataFrame:
         return self._dataframe
 
     @dataframe.setter
     def dataframe(self, dataframe: pd.DataFrame)->None:
+        dtypes = set(dataframe.columns)
+        for dtype in dtypes:
+            if 'timedelta' in dtype:
+                raise NotImplementedError(f"Pyarrow does not support parquet conversion of timedelta columns at this time.")
+
         self._dataframe = dataframe
 
     @property

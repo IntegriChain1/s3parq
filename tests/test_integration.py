@@ -25,22 +25,25 @@ def test_end_to_end():
 
     s3_client.create_bucket(Bucket=bucket_name)
 
-    pub = s3_parq.S3Parq(bucket=bucket_name,
-                         dataset=dataset,
-                         dataframe=df.dataframe,
-                         partitions=['string_options',
-                                     'datetime_options', 'float_options']
-                         )
+    pub = s3_parq.S3Parq()
+                            
+    ## pub it
+    pub.publish(
+                 bucket=bucket_name,
+                 dataset=dataset,
+                 dataframe=df.dataframe,
+                 partitions=['string_options',
+                             'datetime_options', 'float_options']
+                 )
     
-    # publish it
-    pub.publish()
 
  
     # go get it
-    fetch = s3_parq.S3Parq(bucket=bucket_name,
-                           dataset=dataset
-                          )
+    fetch = s3_parq.S3Parq()
 
-    dataframe = fetch.fetch()
+    dataframe = fetch.fetch(
+                bucket=bucket_name,
+                dataset=dataset
+                )
 
     assert dataframe.shape == df.dataframe.shape
