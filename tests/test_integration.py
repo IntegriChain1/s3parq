@@ -3,6 +3,7 @@ import moto
 import s3_parq
 import pytest
 import dfmock
+from s3_parq.publish_parq import publish
 from s3_parq.fetch_parq import fetch
 import pandas as pd
 
@@ -25,10 +26,9 @@ def test_end_to_end():
 
     s3_client.create_bucket(Bucket=bucket_name)
 
-    pub = s3_parq.S3Parq()
-
+    
     ## pub it
-    pub.publish(
+    publish(
         bucket=bucket_name,
         key=key,
         dataframe=df.dataframe,

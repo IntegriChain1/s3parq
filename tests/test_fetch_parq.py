@@ -11,7 +11,7 @@ from .mock_helper import MockHelper
 from s3_parq.fetch_parq import _get_all_files_list, _parse_partitions_and_values, _get_partitions_and_types, _get_partition_value_data_types
 from s3_parq.fetch_parq import _validate_matching_filter_data_type, _get_filtered_key_list, _s3_parquet_to_dataframe
 from s3_parq.fetch_parq import *
-from s3_parq import publish_parq
+from s3_parq.publish_parq import publish
 
 from typing import Dict
 
@@ -445,12 +445,11 @@ class Test():
             'dataframe': df,
             'partitions': partitions
         }
-        publish = publish_parq.S3PublishParq(bucket=bucket,
+        published_files = publish(bucket=bucket,
                                              key=key,
                                              dataframe=df,
                                              partitions=partitions)
 
-        published_files = publish.publish()
         #        partition_key_suffix = "/".join([f"{key}={value}" for key, value in test_partitions])
         return bucket, df, partitions, published_files
 
