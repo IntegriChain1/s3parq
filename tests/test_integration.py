@@ -21,7 +21,7 @@ def test_end_to_end():
     s3_client = boto3.client('s3')
 
     bucket_name = 'thistestbucket'
-    dataset = 'thisdataset'
+    key = 'thisdataset'
 
     s3_client.create_bucket(Bucket=bucket_name)
 
@@ -30,7 +30,7 @@ def test_end_to_end():
     ## pub it
     pub.publish(
                  bucket=bucket_name,
-                 dataset=dataset,
+                 key=key,
                  dataframe=df.dataframe,
                  partitions=['string_options',
                              'datetime_options', 'float_options']
@@ -43,7 +43,7 @@ def test_end_to_end():
 
     dataframe = fetch.fetch(
                 bucket=bucket_name,
-                dataset=dataset
+                dataset=key
                 )
 
     assert dataframe.shape == df.dataframe.shape
