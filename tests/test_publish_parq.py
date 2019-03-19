@@ -20,16 +20,13 @@ class Test:
         bucket = mocker.s3_bucket
         defaults = {
             'bucket': bucket,
-            'dataset': 'safedatasetname',
-            'key_prefix': 'safekeyprefixname',
+            'key': 'safekeyprefixname/safedatasetname',
             'dataframe': df,
             'partitions': []
         }
         return pub_parq.S3PublishParq(bucket=overrides.get('bucket', defaults['bucket']),
-                                      dataset=overrides.get(
-                                          'dataset', defaults['dataset']),
-                                      key_prefix=overrides.get(
-                                          'key_prefix', defaults['key_prefix']),
+                                      key=overrides.get(
+                                          'key', defaults['key']),
                                       dataframe=overrides.get(
                                           'dataframe', defaults['dataframe']),
                                       partitions=overrides.get(
@@ -88,7 +85,7 @@ class Test:
         """ test setup whefre we do not want s3 records.
             Returns the s3 path components to the dataset."""
         bucket = MockHelper().random_name()
-        dataset = MockHelper().random_name()
+        key = MockHelper().random_name()
 
         s3_client = boto3.client('s3')
         s3_client.create_bucket(Bucket=bucket)
@@ -98,13 +95,13 @@ class Test:
                       "bool_col": "boolean", "grouped_col": {"option_count": 4, "option_type": "string"}}
         df.generate_dataframe()
 
-        parq = pub_parq.S3PublishParq(dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=[
-                                      'grouped_col'], key_prefix='')
-        return tuple([bucket, dataset, df.dataframe])
+        parq = pub_parq.S3PublishParq(dataframe=df.dataframe, key=key, bucket=bucket, partitions=[
+                                      'grouped_col'])
+        return tuple([bucket, key, df.dataframe])
 
     # correctly sets s3 metadata
     def test_metadata(self):
-        bucket, dataset, dataframe = self.publish_mock()
+        bucket, key, dataframe = self.publish_mock()
         s3_client = boto3.client('s3')
         for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
             if obj['Key'].endswith(".parquet"):
@@ -122,8 +119,8 @@ class Test:
     # generates valid parquet files identical to source df
     def test_generates_valid_parquet_files(self):
 
-        bucket, dataset, dataframe = self.publish_mock()
-        s3_path = f"s3://{bucket}/{dataset}"
+        bucket, key, dataframe = self.publish_mock()
+        s3_path = f"s3://{bucket}/{key}"
         from_s3 = pq.ParquetDataset(s3_path, filesystem=s3fs.S3FileSystem())
         s3pd = from_s3.read().to_pandas()
         pre_df = dataframe
