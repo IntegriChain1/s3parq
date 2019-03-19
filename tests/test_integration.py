@@ -7,7 +7,6 @@ import dfmock
 
 @moto.mock_s3
 def test_end_to_end():
-
     # make it
     df = dfmock.DFMock(count=10000)
     df.columns = {"string_options": {"option_count": 4, "option_type": "string"},
@@ -26,24 +25,22 @@ def test_end_to_end():
     s3_client.create_bucket(Bucket=bucket_name)
 
     pub = s3_parq.S3Parq()
-                            
+
     ## pub it
     pub.publish(
-                 bucket=bucket_name,
-                 key=key,
-                 dataframe=df.dataframe,
-                 partitions=['string_options',
-                             'datetime_options', 'float_options']
-                 )
-    
+        bucket=bucket_name,
+        key=key,
+        dataframe=df.dataframe,
+        partitions=['string_options',
+                    'datetime_options', 'float_options']
+    )
 
- 
     # go get it
     fetch = s3_parq.S3Parq()
 
     dataframe = fetch.fetch(
-                bucket=bucket_name,
-                dataset=key
-                )
+        bucket=bucket_name,
+        dataset=key
+    )
 
     assert dataframe.shape == df.dataframe.shape

@@ -32,13 +32,20 @@ Required kwargs:
 '''
 # TODO: Future add-ons : get max value of partition
 
+
+# Filter
+# class Filter(NamedTuple):
+#    partition: str
+#    comparison: str
+#    values: List[any]
+
 Filter = {
     "partition": str,
     "comparison": str,
     "values": List[any]
 }
 
-ops = {
+OPS = {
     "==": operator.eq,
     "!=": operator.ne,
     ">=": operator.ge,
@@ -179,7 +186,7 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
     for part, part_values in typed_parts.items():
         for f in filters:
             if (f['partition'] == part):
-                comparison = self.ops[f['comparison']]
+                comparison = OPS[f['comparison']]
                 for v in f['values']:
                     typed_parts[part] = set(filter(
                         lambda x: comparison(x, v),
@@ -220,7 +227,7 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata) -> pd.DataF
     with get_context("spawn").Pool() as pool:
         for path in paths:
             append_to_temp(
-                pool.apply_async(s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
+                pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
         pool.close()
         pool.join()
     return pd.concat(temp_frames)
@@ -231,7 +238,7 @@ def _s3_parquet_to_dataframe(bucket: str, key: str, partition_metadata) -> None:
     uri = f"{bucket}/{key}"
     table = pq.ParquetDataset(uri, filesystem=s3)
     frame = table.read_pandas().to_pandas()
-    partitions = repopulate_partitions(uri, partition_metadata)
+    partitions = _repopulate_partitions(uri, partition_metadata)
     for k, v in partitions.items():
         frame[k] = v
     return frame
@@ -281,7 +288,7 @@ def _validate_filter_rules(filters: List[type(Filter)]) -> None:
         if not all(key in f for key in ("partition", "comparison", "values")):
             raise ValueError(
                 "Filters require partition, comparison, and values.")
-        elif f["comparison"] not in self.ops:
+        elif f["comparison"] not in OPS:
             raise ValueError(
                 f"Comparison {f['comparison']} is not supported.")
         elif (f["comparison"] in single_value_comparisons) & (len(f["values"]) != 1):
