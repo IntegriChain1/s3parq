@@ -4,40 +4,50 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import boto3
+from string import ascii_lowercase
+import random
 from dfmock import DFMock
-import s3_parq.publish_parq as pub_parq
-from .mock_helper import MockHelper
+from s3_parq.publish_parq import *
 import s3fs
 from moto import mock_s3
-
+    
 
 @mock_s3
 class Test:
 
-    def publish_parq_setup(self, overrides: dict = dict()):
-        mocker = MockHelper(count=100, s3=True)
-        df = mocker.dataframe
-        bucket = mocker.s3_bucket
-        defaults = {
-            'bucket': bucket,
-            'dataset': 'safedatasetname',
-            'prefix': 'safekeyprefixname',
-            'dataframe': df,
-            'partitions': []
-        }
-        return pub_parq.S3PublishParq(bucket=overrides.get('bucket', defaults['bucket']),
-                                      dataset=overrides.get(
-                                          'dataset', defaults['dataset']),
-                                      prefix=overrides.get(
-                                          'prefix', defaults['prefix']),
-                                      dataframe=overrides.get(
-                                          'dataframe', defaults['dataframe']),
-                                      partitions=overrides.get(
-                                          'partitions', defaults['partitions'])
-                                      )
+    def setup_s3(self):
+        def rand_string():
+            return ''.join([random.choice(ascii_lowercase) for x in range(0, 10)])
+        
+        bucket = rand_string()
+        key = rand_string()
+
+        s3_client = boto.client('s3')
+        s3_client.create_bucket(Bucket= bucket)
+        
+        return dict("bucket":bucket,"key":key)
+
+    def setup_df(self):
+        df = DFMock(count=100)
+        df.columns = {"text_col": "string",
+                      "int_cal": "integer", "float_col": "float"}
+        df.generate_dataframe()
+        df.dataframe
+
+        return dict("dataframe":df.dataframe, "columns":df.columns.keys()) 
+
+
     # accepts valid column names as partitions
 
     def test_accepts_valid_partitions(self):
+        frame = self.setup_df
+        s3 = self.setup_s3
+
+        partitions = frame['columns'][:1]
+        
+        pub_parq = S3PublishParq(bucket = s3['bucket'],
+                                 key = s3['key'],
+                                    
         df = DFMock(count=100)
         df.columns = {"text_col": "string",
                       "int_cal": "integer", "float_col": "float"}
