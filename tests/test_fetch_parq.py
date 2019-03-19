@@ -159,9 +159,9 @@ class Test():
         s3_client = boto3.client('s3')
         files = s3_client.list_objects_v2(Bucket=bucket)
         first_file_key = files["Contents"][0]["Key"]
-        part_data_types, partition_metadata = _get_partitions_and_types(first_file_key, bucket)
+        partition_metadata = _get_partitions_and_types(first_file_key, bucket)
 
-        assert part_data_types == {"string_col": "string",
+        assert partition_metadata == {"string_col": "string",
                                     "int_col": "integer",
                                     "float_col": "float",
                                     "bool_col": "boolean",

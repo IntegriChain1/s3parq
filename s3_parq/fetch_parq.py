@@ -79,17 +79,28 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)]):
 
     all_files = _get_all_files_list(bucket, key)
 
-    partition_types, partition_metadata = _get_partitions_and_types(all_files[0], bucket)
+    partition_metadata = _get_partitions_and_types(all_files[0], bucket)
 
-    _validate_matching_filter_data_type(partition_types, filters)
+    _validate_matching_filter_data_type(partition_metadata, filters)
 
+    # strip out the filenames (which we need)
     partition_values = _parse_partitions_and_values(all_files, key)
 
     typed_values = _get_partition_value_data_types(
-        partition_values, partition_types)
+        partition_values, partition_metadata)
 
-    filtered_paths = _get_filtered_key_list(typed_values, filters)
-    return _get_filtered_data(bucket=bucket, paths=filtered_paths, partition_metadata=partition_metadata)
+    # filtered_paths is a list of the S3 prefixes from which we want to load data
+    filtered_paths = _get_filtered_key_list(typed_values, filters, key)
+
+    files_to_load = []
+
+    for file in all_files:
+        for prefix in filtered_paths:
+            if file.startswith(prefix):
+                files_to_load.append(file)
+                continue
+
+    return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata)
 
 def _get_partitions_and_types(first_file_key: str, bucket):
     ''' Fetch a list of all the partitions actually there and their 
@@ -107,11 +118,11 @@ def _get_partitions_and_types(first_file_key: str, bucket):
     )
 
     # save for repopulating parquet later
-    partition_metadata = first_file['Metadata']['partition_data_types']
+    partition_metadata_str = first_file['Metadata']['partition_data_types']
 
-    part_data_types = ast.literal_eval(partition_metadata)
+    partition_metadata = ast.literal_eval(partition_metadata_str)
 
-    return part_data_types, partition_metadata
+    return partition_metadata
 
 def _get_all_files_list(bucket, key) -> list:
     ''' Get a list of all files to get all partitions values.
@@ -158,21 +169,21 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
     '''
     for part, values in parsed_parts.items():
         part_type = part_types[part]
-        try:
-            if (part_type == 'string') or (part_type == 'category'):
-                continue
-            elif part_type == 'int':
-                parsed_parts[part] = set(map(int, values))
-            elif part_type == 'float':
-                parsed_parts[part] = set(map(float, values))
-            elif part_type == 'datetime':
-                parsed_parts[part] = set(
-                    map(datetime.datetime.fromisoformat, values))
-            elif part_type == 'bool':
-                parsed_parts[part] = set(map(bool, values))
-        except:
-            raise ValueError(
-                f"Invalid partition type: {part_type} does not match partition {part}")
+        #try:
+        if (part_type == 'string') or (part_type == 'category'):
+            continue
+        elif part_type == 'int':
+            parsed_parts[part] = set(map(int, values))
+        elif part_type == 'float':
+            parsed_parts[part] = set(map(float, values))
+        elif part_type == 'datetime':
+            parsed_parts[part] = set(
+                map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
+        elif part_type == 'bool':
+            parsed_parts[part] = set(map(bool, values))
+        #except:
+        #    raise ValueError(
+        #        f"Invalid partition type: {part_type} does not match partition {part}")
 
     return parsed_parts
 
@@ -210,7 +221,7 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
         else:
             filter_keys.append(previous_fil_keys)
 
-    construct_paths(typed_parts, [key])
+    construct_paths(typed_parts, [f"{key}/"])
 
     # TODO: fix the below mess with random array
     return filter_keys[0]
@@ -224,15 +235,18 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata) -> pd.DataF
     def append_to_temp(frame):
         temp_frames.append(frame)
 
-    with get_context("spawn").Pool() as pool:
-        for path in paths:
-            append_to_temp(
-                pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
-        pool.close()
-        pool.join()
+    for path in paths:
+        print(f"path is: {path}")
+        append_to_temp(_s3_parquet_to_dataframe(bucket, path, partition_metadata))
+    #with get_context("spawn").Pool() as pool:
+    #    for path in paths:
+    #        append_to_temp(
+    #            pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
+    #    pool.close()
+    #    pool.join()
     return pd.concat(temp_frames)
 
-def _s3_parquet_to_dataframe(bucket: str, key: str, partition_metadata) -> None:
+def _s3_parquet_to_dataframe(bucket: str, key: str, partition_metadata) -> pd.DataFrame:
     """ grab a parquet file from s3 and convert to pandas df, add it to the destination"""
     s3 = s3fs.S3FileSystem()
     uri = f"{bucket}/{key}"
@@ -253,11 +267,13 @@ def _repopulate_partitions(partition_string: str, partition_metadata) -> tuple:
             partitions[k] = v
 
     for key, val in partitions.items():
-        try:
-            dtype = partition_metadata[key]
-        except:
-            raise ValueError(
-                f"{key} is not a recognized partition in the current s3 meta.")
+        #try
+        print(partition_metadata)
+        dtype = partition_metadata[key]
+
+        #except:
+        #    raise ValueError(
+        #        f"{key} is not a recognized partition in the current s3 meta.")
         if dtype == 'string':
             partitions[key] = str(val)
         elif dtype == 'integer':

@@ -3,7 +3,7 @@ import moto
 import s3_parq
 import pytest
 import dfmock
-
+from s3_parq.fetch_parq import fetch
 
 @moto.mock_s3
 def test_end_to_end():
@@ -36,11 +36,11 @@ def test_end_to_end():
     )
 
     # go get it
-    fetch = s3_parq.S3Parq()
 
-    dataframe = fetch.fetch(
+    dataframe = fetch(
         bucket=bucket_name,
-        dataset=key
+        key=key,
+        filters={}
     )
 
     assert dataframe.shape == df.dataframe.shape
