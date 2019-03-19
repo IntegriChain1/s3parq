@@ -132,3 +132,20 @@ class Test:
         pre_df = dataframe
         assert set(zip(s3pd.int_col, s3pd.str_col, s3pd.grouped_col)) - \
             set(zip(pre_df.int_col, pre_df.str_col, pre_df.grouped_col)) == set()
+
+    ## timedeltas no good
+    def test_timedeltas_rejected(self):
+        bucket = MockHelper().random_name()
+        dataset = MockHelper().random_name()
+
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket=bucket)
+
+        df = DFMock(count=100)
+        df.columns = {"timedelta_col": "timedelta", "int_col": "int", "float_col": "float",
+                      "bool_col": "boolean", "grouped_col": {"option_count": 4, "option_type": "string"}}
+        df.generate_dataframe()
+
+        with pyest.raises(NotImplementedError):
+            parq = pub_parq.S3PublishParq(
+                dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], prefix='')

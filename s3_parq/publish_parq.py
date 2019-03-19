@@ -28,22 +28,19 @@ class S3PublishParq:
 
     @dataset.setter
     def dataset(self, dataset: str)->None:
-        
-    def test_not_implemented_timedelta(self):
-        df = DFMock(count=100)
-        df.columns = {"time": "timedelta", "stringer": "string"}
-        df.generate_dataframe()
-        parq = S3Parq()
-        with pytest.raises(NotImplementedError):
-            parq.dataframe = df.dataframe
         self._dataset = dataset
-
+   
     @property
     def dataframe(self)->pd.DataFrame:
         return self._dataframe
 
     @dataframe.setter
     def dataframe(self, dataframe: pd.DataFrame)->None:
+        dtypes = set(dataframe.columns)
+        for dtype in dtypes:
+            if 'timedelta' in dtype:
+                raise NotImplementedError(f"Pyarrow does not support parquet conversion of timedelta columns at this time.")
+
         self._dataframe = dataframe
 
     @property
