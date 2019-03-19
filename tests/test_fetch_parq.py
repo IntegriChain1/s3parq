@@ -451,16 +451,15 @@ class Test():
         fetch = S3FetchParq(bucket=mock.s3_bucket,
                             prefix='', dataset='', filters={})
         fetch._partition_metadata = mock.partition_metadata
-        dest = mp.Queue()
-        fetch._s3_parquet_to_dataframe(
-            bucket=mock.s3_bucket, path='/'.join(mock.paths[0].split('/')[:-1]), destination=dest)
+        path = '/'.join(mock.paths[0].split('/')[:-1])
+        response = fetch._s3_parquet_to_dataframe(
+            bucket=mock.s3_bucket, path=path)
 
-        resp = [dest.get()]
-
-        assert len(resp) == 1
-        assert isinstance(resp[0], pd.DataFrame)
+        assert isinstance(response, pd.DataFrame)
+        assert set(fetch._partition_metadata.keys()) <= set(response.columns)
 
     # captures from multiple paths in dataset
+        
         paths = set(['/'.join(mock.paths[x].split('/')[:-1])
                      for x in range(len(mock.paths))])
         big_df = fetch._get_filtered_data(bucket=mock.s3_bucket, paths=paths)
@@ -468,7 +467,7 @@ class Test():
         assert isinstance(big_df, pd.DataFrame)
         assert set(mock.dataframe.columns) == set(big_df.columns)
         assert mock.dataframe.shape == big_df.shape
-
+        
     # Test pulling down a list of parquet files
     def test_fetch_parquet_list(self):
         pass

@@ -56,15 +56,13 @@ class S3PublishParq:
 
     @property
     def partitions(self)->iter:
+        
         return self._partitions
 
     @partitions.setter
-    def partitions(self, partitions: iter):
-        self._partitions = partitions
-
-    def publish(self)->None:
+    def partitions(self, partitions: iter)->None:
         self.logger.debug("Checking partition args...")
-        for partition in self._partitions:
+        for partition in partitions:
             if partition not in self._dataframe.columns.tolist():
                 partition_message = f"Cannot set {partition} as a partition; this is not a valid column header for the supplied dataframe."
                 self.logger.critical(partition_message)
@@ -74,6 +72,9 @@ class S3PublishParq:
                 self.logger.critical(partition_message)
                 raise ValueError(partition_message)
         self.logger.debug("Done checking partitions.")
+        self._partitions = partitions
+
+    def publish(self)->None:
         self.logger.debug("Begin writing to S3..")
         for frame in self._sized_dataframes(self._dataframe):
             self._gen_parquet_to_s3(dataset=self._dataset, bucket=self._bucket,

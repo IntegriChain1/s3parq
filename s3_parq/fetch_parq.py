@@ -112,7 +112,7 @@ class S3FetchParq:
         self._filters = filters
 
     def _key_path(self):
-        return '/'.join([self._prefix,self._dataset]).strip('/')
+        return '/'.join([self._prefix,self._dataset])
 
     def fetch(self):
         ''' Access function to kick off all bits and return result. '''
@@ -274,19 +274,6 @@ class S3FetchParq:
                 append_to_temp(pool.apply_async(self._s3_parquet_to_dataframe, args = (bucket,path,)).get())
             pool.close()
             pool.join()
-
-        '''
-        mp.get_context('spawn')
-        temp_queue = mp.Queue()
-        threads = [mp.Process(target=self._s3_parquet_to_dataframe, args=(
-            bucket, path, temp_queue,)) for path in paths]
-        for thread in threads:
-            thread.start()
-            temp_frames.append(temp_queue.get())
-
-        for thread in threads:
-            thread.join()
-        '''
         return pd.concat(temp_frames)
 
     def _s3_parquet_to_dataframe(self, bucket: str, path: str)->None:

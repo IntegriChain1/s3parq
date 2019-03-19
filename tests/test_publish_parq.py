@@ -79,8 +79,9 @@ class Test:
         partitions = df.dataframe.columns[:1].tolist()
         with patch('s3_parq.publish_parq.boto3', return_value=True) as mock_downstream_method:
             with patch('s3_parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
-                parq = self.publish_parq_setup(
-                    overrides={"dataframe": df.dataframe, "partitions": partitions})
+                partitions = df.dataframe.columns[:1]
+                parq = pub_parq.S3PublishParq(bucket='stub',dataframe=df.dataframe,prefix='stub',dataset='stub', partitions = partitions)     
+                parq.publish()    
                 arg, kwarg = mock_method.call_args
                 assert kwarg['partition_cols'] == partitions
 
@@ -125,6 +126,7 @@ class Test:
 
         bucket, dataset, dataframe = self.publish_mock()
         s3_path = f"s3://{bucket}/{dataset}"
+        s3_client = boto3.client('s3')
         from_s3 = pq.ParquetDataset(s3_path, filesystem=s3fs.S3FileSystem())
         s3pd = from_s3.read().to_pandas()
         pre_df = dataframe

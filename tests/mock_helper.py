@@ -33,7 +33,7 @@ class MockHelper:
 
         if s3:
             self._s3_bucket = self.setup_partitioned_parquet()
-        elif files:
+        if files:
             self._file_ops = self.setup_files_list(
                 count)
 
