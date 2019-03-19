@@ -8,6 +8,8 @@ from dfmock import DFMock
 from collections import OrderedDict
 
 from .mock_helper import MockHelper
+from s3_parq.fetch_parq import _get_all_files_list, _parse_partitions_and_values, _get_partitions_and_types, _get_partition_value_data_types
+from s3_parq.fetch_parq import _validate_matching_filter_data_type, _get_filtered_key_list, _s3_parquet_to_dataframe
 from s3_parq.fetch_parq import *
 from s3_parq import publish_parq
 
@@ -72,14 +74,14 @@ class Test():
         uploaded = mh.file_ops
 
         #fetcher = S3FetchParq(**self.setup_dummy_params())
-        fetcher.bucket = uploaded['bucket']
-        fetcher.key = uploaded['key']
+        bucket = uploaded['bucket']
+        key = uploaded['key']
         test_files = uploaded['files']
 
-        fetched_files = _get_all_files_list
+        fetched_files = _get_all_files_list(bucket, key)
 
         test_files_keyed = list(
-            map(lambda x: fetcher.key + x, test_files))
+            map(lambda x: key + x, test_files))
 
         assert (test_files_keyed.sort()) == (fetched_files.sort())
 
@@ -125,9 +127,8 @@ class Test():
         })
 
         dummy_params = self.setup_dummy_params()
-        fetcher = S3FetchParq(**dummy_params)
 
-        test_parsed_part = fetcher._parse_partitions_and_values(parts)
+        test_parsed_part = _parse_partitions_and_values(parts, dummy_params['key'])
 
         assert parsed_parts == test_parsed_part
 
@@ -143,10 +144,9 @@ class Test():
         parsed_parts = OrderedDict({})
 
         dummy_params = self.setup_dummy_params()
-        fetcher = S3FetchParq(**dummy_params)
-        fetcher.s3_key = "key/"
-
-        test_parsed_part = fetcher._parse_partitions_and_values(parts)
+        #fetcher = S3FetchParq(**dummy_params)
+        key = "key/"
+        test_parsed_part = _parse_partitions_and_values(parts, key)
 
         assert parsed_parts == test_parsed_part
 
@@ -155,15 +155,13 @@ class Test():
         mh = MockHelper(count=10, s3=True, files=False)
         bucket = mh.s3_bucket
         dummy_params = self.setup_dummy_params()
-        fetcher = S3FetchParq(**dummy_params)
-        fetcher.bucket = bucket
 
         s3_client = boto3.client('s3')
         files = s3_client.list_objects_v2(Bucket=bucket)
         first_file_key = files["Contents"][0]["Key"]
-        parsed_part_args = fetcher._get_partitions_and_types(first_file_key)
+        part_data_types, partition_metadata = _get_partitions_and_types(first_file_key, bucket)
 
-        assert parsed_part_args == {"string_col": "string",
+        assert part_data_types == {"string_col": "string",
                                     "int_col": "integer",
                                     "float_col": "float",
                                     "bool_col": "boolean",
@@ -212,9 +210,7 @@ class Test():
         })
 
         dummy_params = self.setup_dummy_params()
-        fetcher = S3FetchParq(**dummy_params)
-
-        typed_parts = fetcher._set_partition_value_data_types(
+        typed_parts = _get_partition_value_data_types(
             parsed_parts=parsed_parts,
             part_types=part_types
         )
@@ -238,11 +234,8 @@ class Test():
             ])
         })
 
-        dummy_params = self.setup_dummy_params()
-        fetcher = S3FetchParq(**dummy_params)
-
         with pytest.raises(ValueError):
-            typed_parts = fetcher._set_partition_value_data_types(
+            _get_partition_value_data_types(
                 parsed_parts=parsed_parts,
                 part_types=part_types
             )
@@ -256,32 +249,29 @@ class Test():
 
     # Test that it errors if filters have no matching partitiion
     def test_no_part_for_filter(self):
-        part_types = {"fil-2": "int",
+        part_types1 = {"fil-2": "int",
                       "fil-1": "int"
                       }
 
-        inv_fil_params = self.setup_dummy_params()
-        inv_fil_params["filters"] = [{
+        filters1 = [{
             "partition": "fake-partition",
             "comparison": "==",
             "values": ["fake-value"]
         }]
 
         with pytest.raises(ValueError):
-            bad_fetch = S3FetchParq(**inv_fil_params)
-            bad_fetch._validate_matching_filter_data_type(part_types)
+            _validate_matching_filter_data_type(part_types1, filters1)
 
-        inv_fil_params["filters"] = [{
+        filters2 = [{
             "partition": "fil-1",
             "comparison": ">",
             "values": ["fake-value"]
         }]
 
-        part_types = {"fil-1": "string"}
+        part_types2 = {"fil-1": "string"}
 
         with pytest.raises(ValueError):
-            bad_fetch = S3FetchParq(**inv_fil_params)
-            bad_fetch._validate_matching_filter_data_type(part_types)
+            _validate_matching_filter_data_type(part_types2, filters2)
 
     # Test that it filters partitions fully
     def test_filter_all_parts(self):
@@ -321,13 +311,11 @@ class Test():
             'fake-key/fil-1=5.45/fil-2=2/fil-3=str/'
         ]
 
-        params = self.setup_dummy_params()
-        params["key"] = "fake-key/"
-        params["filters"] = filters
+        key = "fake-key/"
+        filters = filters
 
-        fetcher = S3FetchParq(**params)
-        filter_paths = fetcher._set_filtered_key_list(
-            typed_parts=typed_parts)
+        filter_paths = _get_filtered_key_list(
+            typed_parts=typed_parts, filters=filters, key=key)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
 
@@ -369,12 +357,11 @@ class Test():
         ]
 
         params = self.setup_dummy_params()
-        params["key"] = "fake-key/"
-        params["filters"] = filters
+        key = "fake-key/"
+        filters = filters
 
-        fetcher = S3FetchParq(**params)
-        filter_paths = fetcher._set_filtered_key_list(
-            typed_parts=typed_parts)
+        filter_paths = _get_filtered_key_list(
+            typed_parts=typed_parts, key=key, filters=filters)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
 
@@ -408,13 +395,11 @@ class Test():
 
         fil_paths = []
 
-        params = self.setup_dummy_params()
-        params["key"] = "fake-key"
-        params["filters"] = filters
+        key = "fake-key"
+        filters = filters
 
-        fetcher = S3FetchParq(**params)
-        filter_paths = fetcher._set_filtered_key_list(
-            typed_parts=typed_parts)
+        filter_paths = _get_filtered_key_list(
+            typed_parts=typed_parts, key=key, filters=filters)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
 
@@ -485,12 +470,10 @@ class Test():
         partitions = partition_types.keys()
         bucket, df, partitions, published_files = self.mock_publish(bucket, key, partition_types)
 
-        fetch = S3FetchParq(bucket=bucket, key=key, filters={})
-
         # fetch._partition_metadata = mock.partition_metadata
         first_published_file = published_files[0]
-        response = fetch._s3_parquet_to_dataframe(
-            bucket=bucket, key=first_published_file)
+        response = _s3_parquet_to_dataframe(
+            bucket=bucket, key=first_published_file, partition_metadata=partition_types)
 
         assert isinstance(response, pd.DataFrame)
         for partition in partition_types.keys():

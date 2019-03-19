@@ -1,6 +1,7 @@
 import boto3
 from .publish_parq import S3PublishParq
-from .fetch_parq import S3FetchParq
+from s3_parq.fetch_parq import fetch
+
 import pandas as pd
 import sys
 import logging
@@ -13,8 +14,7 @@ class S3Parq:
                 bucket: str,
                 key: str,
                 dataframe: pd.DataFrame,
-                partitions: Iterable[str]
-                ) -> None:
+                partitions: Iterable[str]) -> None:
         pub = S3PublishParq(
             dataframe=dataframe,
             bucket=bucket,
@@ -24,12 +24,10 @@ class S3Parq:
         pub.publish()
 
     def fetch(bucket: str,
-              dataset: str,
+              key: str,
               **kwargs
               ) -> None:
-        fetch = S3FetchParq(dataset=dataset,
-                            bucket=bucket,
-                            prefix=kwargs.get('prefix', ''),
-                            filters=kwargs.get('partitions', dict())
-                            )
-        fetch.fetch()
+        return fetch(key=key,
+                     bucket=bucket,
+                     filters=kwargs.get('partitions', dict())
+                     )

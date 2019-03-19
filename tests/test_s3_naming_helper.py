@@ -1,48 +1,45 @@
 import pytest
 from s3_parq.s3_naming_helper import S3NamingHelper
+from typing import NamedTuple
+
+class TestCase(NamedTuple):
+    name: str
+    test_name: str
 
 
 def test_validate_bucket_name():
     helper = S3NamingHelper()
 
-    # must be between 3-63 chars
-    response = helper.validate_bucket_name('ab')
-    assert not response[0], 'allowed bucket name that was too short'
+    invalid_cases = [
+        # must be between 3-63 chars
+        TestCase(name="ab", test_name="allowed bucket name that was too short"),
+        TestCase(name=''.join([str(x) for x in range(0, 65)]), test_name='allowed bucket name that was too long'),
 
-    response = helper.validate_bucket_name(
-        ''.join([str(x) for x in range(0, 65)]))
-    assert not response[0], 'allowed bucket name that was too long'
+        # lower case chars, numbers, periods, dashes
+        TestCase(name='_$Bucket', test_name='allowed bucket name with invalid chars'),
 
-    # lower case chars, numbers, periods, dashes
+        # cannot end with dash
+        TestCase(name="bucket-", test_name='allowed bucket name with dash ending'),
 
-    response = helper.validate_bucket_name('_$Bucket')
-    assert not response[0], 'allowed bucket name with invalid chars'
+        # cannot end with consecutive periods
+        TestCase(name="bucket..", test_name="allowed bucket name with double periods"),
 
-    # cannot end with dash
+        # dashes next to periods
+        TestCase(name="bucket-.", test_name="allowed bucket name with dash next to period"),
 
-    response = helper.validate_bucket_name('bucket-')
-    assert not response[0], 'allowed bucket name with dash ending'
+        # char or number after period
+        TestCase(name="bucket.", test_name="allowed bucket name without a letter or number after period)"),
 
-    # cannot consecutive periods
-    response = helper.validate_bucket_name('bucket..')
-    assert not response[0], 'allowed bucket name with double periods'
+        TestCase(name="_bucket", test_name="allowed bucket name without a letter or number to start")
+    ]
 
-    # dashes next to periods
-    response = helper.validate_bucket_name('bucket-.')
-    assert not response[0], 'allowed bucket name with dash next to period'
+    valid_names = ["bucket"]
+    for invalid_case in invalid_cases:
+        with pytest.raises(ValueError) as excinfo:
+            helper.validate_bucket_name(invalid_case.name)
 
-    # char or number after period
-    response = helper.validate_bucket_name('bucket.')
-    assert not response[0], 'allowed bucket name without a letter or number after period'
-
-    # char or number at start
-    response = helper.validate_bucket_name('_bucket')
-    assert not response[0], 'allowed bucket name without a letter or number to start'
-
-    # valid
-    response = helper.validate_bucket_name('bucket')
-    assert response[0], f'failed to validate valid name - message {response[1]}'
-
+    for valid_name in valid_names:
+        helper.validate_bucket_name(valid_name)
 
 def test_validate_part():
     helper = S3NamingHelper()

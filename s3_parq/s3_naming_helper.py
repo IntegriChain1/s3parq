@@ -55,11 +55,11 @@ class S3NamingHelper:
 
         # cannot consecutive periods
         elif '..' in bucket_name:
-            return tuple([False, 'bucket name cannot include double periods'])
+            return (False, 'bucket name cannot include double periods')
 
         # dashes next to periods
         elif '.-' in bucket_name or '-.' in bucket_name:
-            return tuple([False, 'bucket name cannot have dashes next to periods'])
+            return (False, 'bucket name cannot have dashes next to periods')
 
         # char or number after period
         elif bool(re.search(r"\.[^0-9a-z]*", bucket_name)):
@@ -82,12 +82,12 @@ class S3NamingHelper:
 
         path_parts = path[5:].split('/')
 
-        bucket_validity = self.validate_bucket_name(path_parts[0])
+        bucket_validity = self._validate_bucket_name(path_parts[0])
 
         if not bucket_validity[0]:
             return tuple([False, bucket_validity[1]])
 
-        for part in path_parts:
+        for part in path_parts[1:]:
             part_validity = self.validate_part(part)
             if not part_validity[0]:
                 return tuple([False, part_validity[1]])
