@@ -1,5 +1,5 @@
 import pytest
-from s3_parq.s3_naming_helper import S3NamingHelper
+from s3parq.s3_naming_helper import S3NamingHelper
 from typing import NamedTuple
 
 class TestCase(NamedTuple):
@@ -14,7 +14,7 @@ def test_validate_bucket_name():
         # must be between 3-63 chars
         TestCase(name="ab", test_name="allowed bucket name that was too short"),
         TestCase(name=''.join([str(x) for x in range(0, 65)]), test_name='allowed bucket name that was too long'),
-
+        
         # lower case chars, numbers, periods, dashes
         TestCase(name='_$Bucket', test_name='allowed bucket name with invalid chars'),
 

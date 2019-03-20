@@ -6,11 +6,11 @@ import s3parq.publish_parq as pub_parq
 
 # generates single partition path files of compressed size ~60mb
 
-@pytest.mark.skip(reason="skip to speed up tests")
+#@pytest.mark.skip(reason="skip to speed up tests")
 @mock_s3
 def test_parquet_sizes():
     bucket = "testbucket"
-    dataset = "testdataset"
+    key = "testdataset"
     s3_client = boto3.client('s3')
     s3_client.create_bucket(Bucket=bucket)
     df = DFMock(count=1000)
@@ -18,8 +18,8 @@ def test_parquet_sizes():
                   "grouped_col": {"option_count": 4, "option_type": "string"}}
     df.generate_dataframe()
     df.grow_dataframe_to_size(250)
-    parq = pub_parq.S3PublishParq(
-        dataframe=df.dataframe, dataset=dataset, bucket=bucket, partitions=['grouped_col'], prefix='')
+    pub_parq.publish(
+        dataframe=df.dataframe, key=key, bucket=bucket, partitions=['grouped_col'])
 
     for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
         if obj['Key'].endswith(".parquet"):

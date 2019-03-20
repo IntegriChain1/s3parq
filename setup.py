@@ -12,7 +12,7 @@ setup(
     long_description=description,
     author="The IntegriChain Innovation Team",
     author_email="engineering@integrichain.com",
-    url="https://github.com/IntegriChain1/s3parc",
+    url="https://github.com/IntegriChain1/s3parq",
     license="MIT",
     classifiers=[
         "License :: OSI Approved :: MIT License",
@@ -22,5 +22,5 @@ setup(
     packages= find_packages(exclude=("tests",)),
     include_package_data=True,
     tests_require = ["dfmock==0.0.14","moto"],
-    install_requires=["pandas","pyarrow","boto3","s3fs", "multiprocessing"]
+    install_requires=["pandas","pyarrow","boto3","s3fs"]
     )
