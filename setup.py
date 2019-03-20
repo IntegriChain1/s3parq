@@ -1,16 +1,20 @@
 from setuptools import setup, find_packages
+from os import path
 
 package_name = "s3parq"
 package_version = "0.0.1"
 description = "Write and read/query s3 parquet data using Athena/Spectrum/Hive style partitioning."
-
+cur_directory = path.abspath(path.dirname(__file__))
+with open(path.join(cur_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
     name=package_name,
     version=package_version,
     description=description,
-    long_description=description,
-    author="The IntegriChain Innovation Team",
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+    author="Integrichain Innovation Team",
     author_email="engineering@integrichain.com",
     url="https://github.com/IntegriChain1/s3parq",
     license="MIT",
