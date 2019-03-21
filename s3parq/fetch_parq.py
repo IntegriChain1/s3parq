@@ -77,7 +77,7 @@ Phase 3:
     Concat dataframes and return
 '''
 
-def fetch_max_partition_value(bucket: str, key: str, partition: str) -> any:
+def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
     ''' Returns the max value of the specified partition
     in the data type from the metadata.
     '''
