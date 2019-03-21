@@ -1,6 +1,6 @@
 import boto3
 from s3parq.publish_parq import publish
-from s3parq.fetch_parq import fetch, fetch_max_partition_value
+from s3parq.fetch_parq import fetch, get_max_partition_value
 
 import pandas as pd
 import sys
@@ -35,8 +35,8 @@ class S3Parq:
                      filters=kwargs.get('partitions', dict())
                      )
 
-    def fetch_max_partition_value(self, bucket: str, key: str, partition: str) -> any:
-        return fetch_max_partition_value(
+    def get_max_partition_value(self, bucket: str, key: str, partition: str) -> any:
+        return get_max_partition_value(
             bucket=bucket,
             key=key,
             partition=partition
