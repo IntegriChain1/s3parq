@@ -312,7 +312,7 @@ class Test():
             fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="string_col")
 
         with pytest.raises(ValueError):
-            fetched_max = fetch_max_partition_value(bucket=bucket, key=key, partition="bool_col")
+            fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="bool_col")
 
     # Test that it errors if filters have no matching partitiion
     def test_no_part_for_filter(self):
