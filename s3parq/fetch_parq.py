@@ -3,7 +3,7 @@ import boto3
 from collections import OrderedDict
 import datetime
 import operator
-from typing import List
+from typing import List, Any
 import multiprocessing as mp
 from multiprocessing import get_context
 import s3fs
@@ -103,6 +103,21 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata,
                               parallel=parallel)
 
+def convert_type(val:Any, dtype:str)->Any:
+    """ converts a value to the given datatype"""
+    if dtype == 'string':
+        return str(val)
+    elif dtype == 'integer':
+        return int(val)
+    elif dtype == 'float':
+        return float(val)
+    elif dtype == 'datetime':
+        return datetime.datetime.strptime(
+            val, '%Y-%m-%d %H:%M:%S')
+    elif dtype == 'category':
+        return pd.Category(val)
+    elif dtype == 'bool':
+        return bool(val)
 
 def _get_partitions_and_types(first_file_key: str, bucket):
     ''' Fetch a list of all the partitions actually there and their 
@@ -119,10 +134,7 @@ def _get_partitions_and_types(first_file_key: str, bucket):
         Key=first_file_key
     )
 
-    # save for repopulating parquet later
-    partition_metadata_str = first_file['Metadata']['partition_data_types']
-
-    partition_metadata = ast.literal_eval(partition_metadata_str)
+    partition_metadata = ast.literal_eval(first_file['Metadata']['partition_data_types'])
 
     return partition_metadata
 
@@ -174,7 +186,6 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
     '''
     for part, values in parsed_parts.items():
         part_type = part_types[part]
-        # try:
         if (part_type == 'string') or (part_type == 'category'):
             continue
         elif part_type == 'int':
@@ -186,12 +197,8 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
                 map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
         elif part_type == 'bool':
             parsed_parts[part] = set(map(bool, values))
-        # except:
-        #    raise ValueError(
-        #        f"Invalid partition type: {part_type} does not match partition {part}")
 
     return parsed_parts
-
 
 # TODO: Neaten up?
 def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
@@ -278,24 +285,7 @@ def _repopulate_partitions(partition_string: str, partition_metadata) -> tuple:
             partitions[k] = v
 
     for key, val in partitions.items():
-        # try
-        dtype = partition_metadata[key]
-        # except:
-        #    raise ValueError(
-        #        f"{key} is not a recognized partition in the current s3 meta.")
-        if dtype == 'string':
-            partitions[key] = str(val)
-        elif dtype == 'integer':
-            partitions[key] = int(val)
-        elif dtype == 'float':
-            partitions[key] = float(val)
-        elif dtype == 'datetime':
-            partitions[key] = datetime.datetime.strptime(
-                val, '%Y-%m-%d %H:%M:%S')
-        elif dtype == 'category':
-            partitions[key] = pd.Category(val)
-        elif dtype == 'bool':
-            partitions[key] = bool(val)
+        partitions[key] = convert_type(val, partition_metadata[key])
     return partitions
 
 
