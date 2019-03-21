@@ -3,7 +3,7 @@ import boto3
 from collections import OrderedDict
 import datetime
 import operator
-from typing import List
+from typing import Dict, List
 import multiprocessing as mp
 from multiprocessing import get_context
 import s3fs
@@ -29,7 +29,6 @@ Required kwargs:
                 Values to compare to - must match partition data type
                 May not use multiple values with the '<', '>' comparisons
 '''
-# TODO: Future add-ons : get max value of partition
 
 
 # Filter
@@ -53,6 +52,13 @@ OPS = {
     "<": operator.lt
 }
 
+NON_NUM_TYPES = [
+    "string",
+    "category",
+    "bool",
+    "boolean"
+]
+
 ''' TODO: development notes, remove after
 Internal attributes:
     List of keys for the filtered dataset
@@ -70,6 +76,35 @@ Phase 3:
     Transform files to dataframes
     Concat dataframes and return
 '''
+
+def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
+    ''' Returns the max value of the specified partition
+    in the data type from the metadata.
+    '''
+    S3NamingHelper().validate_bucket_name(bucket_name=bucket)
+
+    all_files = _get_all_files_list(bucket=bucket, key=key)
+
+    partition_metadata = _get_partitions_and_types(
+        first_file_key=all_files[0], bucket=bucket)
+    partition_values = _parse_partitions_and_values(
+        file_paths=all_files, key=key)
+
+    value = {}
+    metadata = {}
+    # Cut down to specified partition, keeping as dict for consistency
+    value[partition] = partition_values[partition]
+    metadata[partition] = partition_metadata[partition]
+
+    if metadata[partition] in NON_NUM_TYPES:
+        raise ValueError(f"Max cannot be used on partition types of {metadata[partition]}")
+
+    typed_value = _get_partition_value_data_types(
+        parsed_parts=value, part_types=metadata)
+
+    max_partition_value = max(typed_value[partition])
+    
+    return max_partition_value
 
 
 def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: bool = True):
@@ -177,14 +212,14 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
         # try:
         if (part_type == 'string') or (part_type == 'category'):
             continue
-        elif part_type == 'int':
+        elif (part_type == 'int') or (part_type == 'integer'):
             parsed_parts[part] = set(map(int, values))
         elif part_type == 'float':
             parsed_parts[part] = set(map(float, values))
         elif part_type == 'datetime':
             parsed_parts[part] = set(
                 map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
-        elif part_type == 'bool':
+        elif (part_type == 'bool') or (part_type == 'boolean'):
             parsed_parts[part] = set(map(bool, values))
         # except:
         #    raise ValueError(
@@ -333,12 +368,6 @@ def _validate_matching_filter_data_type(part_types, filters) -> None:
         ">="
     ]
 
-    non_num_types = [
-        "string",
-        "category",
-        "bool"
-    ]
-
     for f in filters:
         try:
             fil_part = part_types[f["partition"]]
@@ -346,6 +375,6 @@ def _validate_matching_filter_data_type(part_types, filters) -> None:
             raise ValueError("Filter does not have a matching partition.")
 
         if (f["comparison"] in num_comparisons):
-            if fil_part in non_num_types:
+            if fil_part in NON_NUM_TYPES:
                 raise ValueError(
                     f"Comparison {f['comparison']} cannot be used on partition types of {fil_part}")

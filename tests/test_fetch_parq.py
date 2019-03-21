@@ -8,8 +8,15 @@ from dfmock import DFMock
 from collections import OrderedDict
 
 from .mock_helper import MockHelper
-from s3parq.fetch_parq import _get_all_files_list, _parse_partitions_and_values, _get_partitions_and_types, _get_partition_value_data_types
-from s3parq.fetch_parq import _validate_matching_filter_data_type, _get_filtered_key_list, _s3_parquet_to_dataframe
+from s3parq.fetch_parq import (
+    _get_all_files_list, 
+    _get_filtered_key_list,
+    _get_partitions_and_types, 
+    _get_partition_value_data_types,
+    _parse_partitions_and_values, 
+    _s3_parquet_to_dataframe,
+    _validate_matching_filter_data_type
+)
 from s3parq.fetch_parq import *
 from s3parq.publish_parq import publish
 
@@ -19,19 +26,52 @@ from typing import Dict
 @moto.mock_s3
 class Test():
 
-    # TODO: refactor to use MockHelper in places for more complete coverage
-    def setup_dummy_params(self):
-        dummy_init_params = {
-            "bucket": "fake-bucket",
-            "key": "fake-key",
-            "filters": [{
-                "partition": "fake-partition",
-                "comparison": "==",
-                "values": ["fake-value"]
-            }]
-        }
+    # TODO: refactor to create local functions and cut Mockhelper
+    def setup_s3(self):
+        def rand_string():
+            return ''.join([random.choice(ascii_lowercase) for x in range(0, 10)])
+        
+        bucket = rand_string()
+        key = rand_string()
 
-        return dummy_init_params
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket= bucket)
+        
+        return bucket, key
+
+    def mock_publish(self, bucket, key, partition_types: Dict[str, str]):
+        mocker = MockHelper(count=100, s3=True)
+        df = mocker.dataframe
+        partitions = partition_types.keys()
+        dfmock = DFMock()
+        dfmock.count = 10
+
+        # add partition columns
+        columns = dict({key: {"option_count": 3, "option_type": value} for key, value in partition_types.items()})
+
+        # add one actual data column, called metrics
+        columns["metrics"] = "int"
+
+        dfmock.columns = columns
+        dfmock.generate_dataframe()
+
+        # generate dataframe we will write
+        df = dfmock.dataframe
+        key = 'safekeyprefixname/safedatasetname'
+        bucket = mocker.s3_bucket
+
+        defaults = {
+            'bucket': bucket,
+            'key': key,
+            'dataframe': df,
+            'partitions': partitions
+        }
+        published_files = publish(bucket=bucket,
+                                    key=key,
+                                    dataframe=df,
+                                    partitions=partitions)
+
+        return bucket, df, partitions, published_files
 
     ''' Phase 1 tests:
     Refer to functionality of fetch_parq that:
@@ -39,14 +79,6 @@ class Test():
         - Fetches partitions and associated data
     '''
 
-    # Test requires bucket, key, filters
-    # def test_requires_params(self):
-    #    good_fetch = S3FetchParq(**self.setup_dummy_params())
-
-    #    with pytest.raises(TypeError):
-    #        bad_fetch = S3FetchParq(bucket="just-a-bucket")
-
-    # Test that if inapropriate filters are passed it'll be denied
     def test_invalid_filters(self):
         inv_fil_params = {
             "bucket": "fake-bucket",
@@ -73,7 +105,6 @@ class Test():
         mh = MockHelper(count=100, s3=False, files=True)
         uploaded = mh.file_ops
 
-        #fetcher = S3FetchParq(**self.setup_dummy_params())
         bucket = uploaded['bucket']
         key = uploaded['key']
         test_files = uploaded['files']
@@ -86,19 +117,20 @@ class Test():
         assert (test_files_keyed.sort()) == (fetched_files.sort())
 
     # Test that all files matching key get listed out even with pagination
-    # def test_fetch_files_list_more_than_1k(self):
-    #     mh = MockHelper(count=1500, s3=False, files=True)
-    #     uploaded = mh.file_ops
+    def test_fetch_files_list_more_than_1k(self):
+        mh = MockHelper(count=1500, s3=False, files=True)
+        uploaded = mh.file_ops
 
-    #     fetcher = S3FetchParq(**self.setup_dummy_params())
-    #     fetcher.s3_bucket = uploaded['bucket']
-    #     fetcher.s3_key = uploaded['key']
-    #     test_files = uploaded['files']
+        bucket = uploaded['bucket']
+        key = uploaded['key']
+        test_files = uploaded['files']
 
-    #     fetched_files = fetcher._get_all_files_list()
-    #     test_files_keyed = list(map(lambda x: fetcher.s3_key + x, test_files))
+        fetched_files = _get_all_files_list(bucket, key)
 
-    #     assert (test_files_keyed.sort()) == (fetched_files.sort())
+        test_files_keyed = list(
+            map(lambda x: key + x, test_files))
+
+        assert (test_files_keyed.sort()) == (fetched_files.sort())
 
     # Test that all valid partitions are correctly parsed
     def test_get_partitions(self):
@@ -126,9 +158,8 @@ class Test():
             }
         })
 
-        dummy_params = self.setup_dummy_params()
-
-        test_parsed_part = _parse_partitions_and_values(parts, dummy_params['key'])
+        key = "key/"
+        test_parsed_part = _parse_partitions_and_values(parts, key)
 
         assert parsed_parts == test_parsed_part
 
@@ -143,8 +174,6 @@ class Test():
         ]
         parsed_parts = OrderedDict({})
 
-        dummy_params = self.setup_dummy_params()
-        #fetcher = S3FetchParq(**dummy_params)
         key = "key/"
         test_parsed_part = _parse_partitions_and_values(parts, key)
 
@@ -154,7 +183,6 @@ class Test():
     def test_get_data_types_from_s3(self):
         mh = MockHelper(count=10, s3=True, files=False)
         bucket = mh.s3_bucket
-        dummy_params = self.setup_dummy_params()
 
         s3_client = boto3.client('s3')
         files = s3_client.list_objects_v2(Bucket=bucket)
@@ -209,7 +237,6 @@ class Test():
             ])
         })
 
-        dummy_params = self.setup_dummy_params()
         typed_parts = _get_partition_value_data_types(
             parsed_parts=parsed_parts,
             part_types=part_types
@@ -246,6 +273,46 @@ class Test():
         - Creates path(s) that lead to the appropriate files
         - Gets the list of those files to pull down from
     '''
+
+    # Test that functionality of max pulls correctly
+    def test_gets_max(self):
+        key = "safekeyprefixname/safedatasetname"
+        bucket = "safebucketname"
+        part_types = {
+            "int_col": "int",
+            "float_col": "float"
+        }
+        bucket, df, partitions, published_files = self.mock_publish(
+                                                        bucket=bucket,
+                                                        key=key,
+                                                        partition_types=part_types
+                                                    )
+        
+        fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="int_col")
+
+        # Test max of column is max of the fetched partition
+        assert df["int_col"].max() == fetched_max
+
+    # Test that the max function denies non-numeric partitions
+    # TODO: add category when it becomes supported
+    def test_gets_max(self):
+        key = "safekeyprefixname/safedatasetname"
+        bucket = "safebucketname"
+        part_types = {
+            "string_col": "string",
+            "bool_col": "bool"
+        }
+        bucket, df, partitions, published_files = self.mock_publish(
+                                                        bucket=bucket,
+                                                        key=key,
+                                                        partition_types=part_types
+                                                    )
+        
+        with pytest.raises(ValueError):
+            fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="string_col")
+
+        with pytest.raises(ValueError):
+            fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="bool_col")
 
     # Test that it errors if filters have no matching partitiion
     def test_no_part_for_filter(self):
@@ -356,7 +423,6 @@ class Test():
             'fake-key/fil-1=5.45/fil-2=2/fil-3=str_rng/'
         ]
 
-        params = self.setup_dummy_params()
         key = "fake-key/"
         filters = filters
 
@@ -417,41 +483,6 @@ class Test():
         - Transforms the files into dataframes
         - Concatenates the dataframes and returns them
     '''
-
-    def mock_publish(self, bucket, key, partition_types: Dict[str, str]):
-        mocker = MockHelper(count=100, s3=True)
-        df = mocker.dataframe
-        partitions = partition_types.keys()
-        dfmock = DFMock()
-        dfmock.count = 10
-
-        # add partition columns
-        columns = dict({key: {"option_count": 3, "option_type": value} for key, value in partition_types.items()})
-
-        # add one actual data column, called metrics
-        columns["metrics"] = "int"
-
-        dfmock.columns = columns
-        dfmock.generate_dataframe()
-
-        # generate dataframe we will write
-        df = dfmock.dataframe
-        key = 'safekeyprefixname/safedatasetname'
-        bucket = mocker.s3_bucket
-
-        defaults = {
-            'bucket': bucket,
-            'key': key,
-            'dataframe': df,
-            'partitions': partitions
-        }
-        published_files = publish(bucket=bucket,
-                                             key=key,
-                                             dataframe=df,
-                                             partitions=partitions)
-
-        #        partition_key_suffix = "/".join([f"{key}={value}" for key, value in test_partitions])
-        return bucket, df, partitions, published_files
 
     # captures from a single parquet path dataset
     def test_s3_parquet_to_dataframe(self):
