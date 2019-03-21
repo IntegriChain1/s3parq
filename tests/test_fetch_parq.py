@@ -288,7 +288,7 @@ class Test():
                                                         partition_types=part_types
                                                     )
         
-        fetched_max = fetch_max_partition_value(bucket=bucket, key=key, partition="int_col")
+        fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="int_col")
 
         # Test max of column is max of the fetched partition
         assert df["int_col"].max() == fetched_max
@@ -309,7 +309,7 @@ class Test():
                                                     )
         
         with pytest.raises(ValueError):
-            fetched_max = fetch_max_partition_value(bucket=bucket, key=key, partition="string_col")
+            fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="string_col")
 
         with pytest.raises(ValueError):
             fetched_max = fetch_max_partition_value(bucket=bucket, key=key, partition="bool_col")
