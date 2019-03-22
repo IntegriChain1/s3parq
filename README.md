@@ -22,7 +22,7 @@ we get data by dataset name.
     dataframe = pd.DataFrame(['some_big_data'])
     
     ## writing to s3
-    parq.fetch(  bucket=bucket,
+    parq.publish(  bucket=bucket,
                     key=key,
                     dataframe=dataframe, 
                     partitions= ['column1',
