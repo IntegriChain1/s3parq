@@ -557,3 +557,19 @@ class Test():
                 ## list values not in partition values
                 deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values, reverse=True)
                 assert deltas == [rando_values[-1]]
+
+    def test_get_partition_values(self):
+        bucket = 'safebucket'
+        key = 'dataset'
+        partition='burgertime'
+        rando_values = [(datetime.datetime.now() - datetime.timedelta(seconds = random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
+        s3_paths = [f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values]
+
+        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+                _get_all_files_list.return_value = s3_paths
+                _get_partitions_and_types.return_value = {"burgertime":"datetime"}
+
+                all_values = fetch_parq.get_all_partition_values(bucket=bucket,key=key,partition=partition)
+
+                assert set(all_values) == set(rando_values)

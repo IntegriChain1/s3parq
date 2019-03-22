@@ -76,6 +76,14 @@ Phase 3:
     Transform files to dataframes
     Concat dataframes and return
 '''
+def get_all_partition_values(bucket:str, key:str, partition:str)->iter:
+    """retruns all values, correctly typed, for a given partition IN NO ORDER."""
+    all_files = _get_all_files_list(bucket,key)
+    partition_dtype = _get_partitions_and_types(
+        first_file_key=all_files[0], bucket=bucket)[partition]
+    partition_values = _parse_partitions_and_values(all_files, key=key)[partition]
+    return [convert_type(val, partition_dtype) for val in partition_values]
+
 def get_diff_partition_values(bucket:str, key:str, partition: str, values_to_diff: iter, reverse:bool=False) -> iter:
     """ returns all the partition values in bucket/key that are not in values_to_diff.
         ARGS:
