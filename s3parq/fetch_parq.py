@@ -76,33 +76,39 @@ Phase 3:
     Transform files to dataframes
     Concat dataframes and return
 '''
-def get_all_partition_values(bucket:str, key:str, partition:str)->iter:
+
+
+def get_all_partition_values(bucket: str, key: str, partition: str)->iter:
     """retruns all values, correctly typed, for a given partition IN NO ORDER."""
-    all_files = _get_all_files_list(bucket,key)
+    all_files = _get_all_files_list(bucket, key)
     partition_dtype = _get_partitions_and_types(
         first_file_key=all_files[0], bucket=bucket)[partition]
-    partition_values = _parse_partitions_and_values(all_files, key=key)[partition]
+    partition_values = _parse_partitions_and_values(all_files, key=key)[
+        partition]
     return [convert_type(val, partition_dtype) for val in partition_values]
 
-def get_diff_partition_values(bucket:str, key:str, partition: str, values_to_diff: iter, reverse:bool=False) -> iter:
+
+def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_diff: iter, reverse: bool = False) -> iter:
     """ returns all the partition values in bucket/key that are not in values_to_diff.
         ARGS:
             values_to_diff: the iterable of values to compare the partition values to
             reverse: if True, will look for the values in values_to_diff that are not in partition values (basically backwards)    
      """
-    all_files = _get_all_files_list(bucket,key)
+    all_files = _get_all_files_list(bucket, key)
     partition_dtype = _get_partitions_and_types(
         first_file_key=all_files[0], bucket=bucket)[partition]
-    partition_values = _parse_partitions_and_values(all_files, key=key)[partition]
-    
+    partition_values = _parse_partitions_and_values(all_files, key=key)[
+        partition]
+
     partition_set = set(partition_values)
-    values_to_diff_set = set([str(val) for val in values_to_diff])    
-    
+    values_to_diff_set = set([str(val) for val in values_to_diff])
+
     if reverse:
         diff = values_to_diff_set - partition_set
     else:
         diff = partition_set - values_to_diff_set
     return [convert_type(val, partition_dtype) for val in diff]
+
 
 def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
     ''' Returns the max value of the specified partition
@@ -118,9 +124,10 @@ def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
         file_paths=all_files, key=key)[partition]
 
     if partition_dtype in NON_NUM_TYPES:
-        raise ValueError(f"Max cannot be used on partition types of {partition_dtype}")
+        raise ValueError(
+            f"Max cannot be used on partition types of {partition_dtype}")
 
-    return max([convert_type(val,partition_dtype) for val in partition_values])
+    return max([convert_type(val, partition_dtype) for val in partition_values])
 
 
 def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: bool = True):
@@ -154,7 +161,8 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata,
                               parallel=parallel)
 
-def convert_type(val:Any, dtype:str)->Any:
+
+def convert_type(val: Any, dtype: str)->Any:
     """ converts a value to the given datatype"""
     if dtype == 'string':
         return str(val)
@@ -169,6 +177,7 @@ def convert_type(val:Any, dtype:str)->Any:
         return pd.Category(val)
     elif dtype == 'bool':
         return bool(val)
+
 
 def _get_partitions_and_types(first_file_key: str, bucket):
     ''' Fetch a list of all the partitions actually there and their 
@@ -185,7 +194,8 @@ def _get_partitions_and_types(first_file_key: str, bucket):
         Key=first_file_key
     )
 
-    partition_metadata = ast.literal_eval(first_file['Metadata']['partition_data_types'])
+    partition_metadata = ast.literal_eval(
+        first_file['Metadata']['partition_data_types'])
 
     return partition_metadata
 
@@ -252,6 +262,8 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
     return parsed_parts
 
 # TODO: Neaten up?
+
+
 def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
     ''' Create list of all "paths" to files after the filtered partitions
     are set ie all non-matching partitions are excluded.
@@ -276,7 +288,7 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
             for value in part[1]:
                 mapped_keys = list(map(
                     (lambda x: str(x) +
-                               str(part[0]) + "=" + str(value) + "/"),
+                     str(part[0]) + "=" + str(value) + "/"),
                     previous_fil_keys
                 ))
                 new_filter_keys = new_filter_keys + mapped_keys
@@ -309,7 +321,8 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata, parallel=Tr
                 pool.close()
                 pool.join()
         else:
-            append_to_temp(_s3_parquet_to_dataframe(bucket, path, partition_metadata))
+            append_to_temp(_s3_parquet_to_dataframe(
+                bucket, path, partition_metadata))
 
     return pd.concat(temp_frames)
 

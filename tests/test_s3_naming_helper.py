@@ -2,6 +2,7 @@ import pytest
 from s3parq.s3_naming_helper import S3NamingHelper
 from typing import NamedTuple
 
+
 class TestCase(NamedTuple):
     name: str
     test_name: str
@@ -13,24 +14,30 @@ def test_validate_bucket_name():
     invalid_cases = [
         # must be between 3-63 chars
         TestCase(name="ab", test_name="allowed bucket name that was too short"),
-        TestCase(name=''.join([str(x) for x in range(0, 65)]), test_name='allowed bucket name that was too long'),
-        
+        TestCase(name=''.join([str(x) for x in range(0, 65)]),
+                 test_name='allowed bucket name that was too long'),
+
         # lower case chars, numbers, periods, dashes
-        TestCase(name='_$Bucket', test_name='allowed bucket name with invalid chars'),
+        TestCase(name='_$Bucket',
+                 test_name='allowed bucket name with invalid chars'),
 
         # cannot end with dash
         TestCase(name="bucket-", test_name='allowed bucket name with dash ending'),
 
         # cannot end with consecutive periods
-        TestCase(name="bucket..", test_name="allowed bucket name with double periods"),
+        TestCase(name="bucket..",
+                 test_name="allowed bucket name with double periods"),
 
         # dashes next to periods
-        TestCase(name="bucket-.", test_name="allowed bucket name with dash next to period"),
+        TestCase(name="bucket-.",
+                 test_name="allowed bucket name with dash next to period"),
 
         # char or number after period
-        TestCase(name="bucket.", test_name="allowed bucket name without a letter or number after period)"),
+        TestCase(name="bucket.",
+                 test_name="allowed bucket name without a letter or number after period)"),
 
-        TestCase(name="_bucket", test_name="allowed bucket name without a letter or number to start")
+        TestCase(name="_bucket",
+                 test_name="allowed bucket name without a letter or number to start")
     ]
 
     valid_names = ["bucket"]
@@ -40,6 +47,7 @@ def test_validate_bucket_name():
 
     for valid_name in valid_names:
         helper.validate_bucket_name(valid_name)
+
 
 def test_validate_part():
     helper = S3NamingHelper()

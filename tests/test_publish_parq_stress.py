@@ -6,7 +6,9 @@ import s3parq.publish_parq as pub_parq
 
 # generates single partition path files of compressed size ~60mb
 
-#@pytest.mark.skip(reason="skip to speed up tests")
+# @pytest.mark.skip(reason="skip to speed up tests")
+
+
 @mock_s3
 def test_parquet_sizes():
     bucket = "testbucket"

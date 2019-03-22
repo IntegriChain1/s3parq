@@ -11,7 +11,7 @@ from typing import List
 logger = logging.getLogger(__name__)
 
 
-def check_dataframe_for_timedelta(dataframe:pd.DataFrame)->None:
+def check_dataframe_for_timedelta(dataframe: pd.DataFrame)->None:
     """Pyarrow can't do timedelta."""
     dtypes = set(dataframe.columns)
     for dtype in dtypes:
@@ -22,12 +22,13 @@ def check_dataframe_for_timedelta(dataframe:pd.DataFrame)->None:
 
 
 def _check_partition_compatibility(partition: str) -> bool:
-        """ Make sure each partition value is hive-allowed."""
-        reserved = "ALL, ALTER, AND, ARRAY, AS, AUTHORIZATION, BETWEEN, BIGINT, BINARY, BOOLEAN, BOTH, BY, CASE, CAST, CHAR, COLUMN, CONF, CREATE, CROSS, CUBE, CURRENT, CURRENT_DATE, CURRENT_TIMESTAMP, CURSOR, DATABASE, DATE, DECIMAL, DELETE, DESCRIBE, DISTINCT, DOUBLE, DROP, ELSE, END, EXCHANGE, EXISTS, EXTENDED, EXTERNAL, FALSE, FETCH, FLOAT, FOLLOWING, FOR, FROM, FULL, FUNCTION, GRANT, GROUP, GROUPING, HAVING, IF, IMPORT, IN, INNER, INSERT, INT, INTERSECT, INTERVAL, INTO, IS, JOIN, LATERAL, LEFT, LESS, LIKE, LOCAL, MACRO, MAP, MORE, NONE, NOT, NULL, OF, ON, OR, ORDER, OUT, OUTER, OVER, PARTIALSCAN, PARTITION, PERCENT, PRECEDING, PRESERVE, PROCEDURE, RANGE, READS, REDUCE, REVOKE, RIGHT, ROLLUP, ROW, ROWS, SELECT, SET, SMALLINT, TABLE, TABLESAMPLE, THEN, TIMESTAMP, TO, TRANSFORM, TRIGGER, TRUE, TRUNCATE, UNBOUNDED, UNION, UNIQUEJOIN, UPDATE, USER, USING, UTC_TMESTAMP, VALUES, VARCHAR, WHEN, WHERE, WINDOW, WITH, COMMIT, ONLY, REGEXP, RLIKE, ROLLBACK, START, CACHE, CONSTRAINT, FOREIGN, PRIMARY, REFERENCES, DAYOFWEEK, EXTRACT, FLOOR, INTEGER, PRECISION, VIEWS, TIME, NUMERIC, SYNC".split()
-        reserved = [x.strip(',') for x in reserved]
-        return not (partition.upper() in reserved)
+    """ Make sure each partition value is hive-allowed."""
+    reserved = "ALL, ALTER, AND, ARRAY, AS, AUTHORIZATION, BETWEEN, BIGINT, BINARY, BOOLEAN, BOTH, BY, CASE, CAST, CHAR, COLUMN, CONF, CREATE, CROSS, CUBE, CURRENT, CURRENT_DATE, CURRENT_TIMESTAMP, CURSOR, DATABASE, DATE, DECIMAL, DELETE, DESCRIBE, DISTINCT, DOUBLE, DROP, ELSE, END, EXCHANGE, EXISTS, EXTENDED, EXTERNAL, FALSE, FETCH, FLOAT, FOLLOWING, FOR, FROM, FULL, FUNCTION, GRANT, GROUP, GROUPING, HAVING, IF, IMPORT, IN, INNER, INSERT, INT, INTERSECT, INTERVAL, INTO, IS, JOIN, LATERAL, LEFT, LESS, LIKE, LOCAL, MACRO, MAP, MORE, NONE, NOT, NULL, OF, ON, OR, ORDER, OUT, OUTER, OVER, PARTIALSCAN, PARTITION, PERCENT, PRECEDING, PRESERVE, PROCEDURE, RANGE, READS, REDUCE, REVOKE, RIGHT, ROLLUP, ROW, ROWS, SELECT, SET, SMALLINT, TABLE, TABLESAMPLE, THEN, TIMESTAMP, TO, TRANSFORM, TRIGGER, TRUE, TRUNCATE, UNBOUNDED, UNION, UNIQUEJOIN, UPDATE, USER, USING, UTC_TMESTAMP, VALUES, VARCHAR, WHEN, WHERE, WINDOW, WITH, COMMIT, ONLY, REGEXP, RLIKE, ROLLBACK, START, CACHE, CONSTRAINT, FOREIGN, PRIMARY, REFERENCES, DAYOFWEEK, EXTRACT, FLOOR, INTEGER, PRECISION, VIEWS, TIME, NUMERIC, SYNC".split()
+    reserved = [x.strip(',') for x in reserved]
+    return not (partition.upper() in reserved)
 
-def check_partitions(partitions:iter, dataframe:pd.DataFrame)->None:
+
+def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
     logger.debug("Checking partition args...")
     for partition in partitions:
         if partition not in dataframe.columns.tolist():
@@ -40,8 +41,10 @@ def check_partitions(partitions:iter, dataframe:pd.DataFrame)->None:
             raise ValueError(partition_message)
     logger.debug("Done checking partitions.")
 
+
 def s3_url(bucket: str, key: str):
     return '/'.join(["s3:/", bucket, key])
+
 
 def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
                        partitions: list) -> None:
@@ -55,6 +58,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
                         partition_cols=partitions, filesystem=s3fs.S3FileSystem())
     logger.debug("Done writing to location.")
 
+
 def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame) -> List[str]:
     """ assigns the dataset partition meta to all keys in the dataset"""
     s3_client = boto3.client('s3')
@@ -67,10 +71,12 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame) -> Li
         logger.debug(f"Appending metadata to file {obj}..")
         s3_client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj}, Key=obj,
                               Metadata={'partition_data_types': str(
-                                  _parse_dataframe_col_types(dataframe=dataframe)
+                                  _parse_dataframe_col_types(
+                                      dataframe=dataframe)
                               )}, MetadataDirective='REPLACE')
         logger.debug("Done appending metadata.")
     return all_files
+
 
 def _parse_dataframe_col_types(dataframe: pd.DataFrame) -> dict:
     """ Returns a dict with the column names as keys, the data types (in strings) as values."""
@@ -93,6 +99,7 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame) -> dict:
     logger.debug(f"Done.Metadata set as {dtypes}")
     return dtypes
 
+
 def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
     """Takes a dataframe and slices it into sized dataframes for optimal parquet sizes in S3.
         RETURNS a tuple of dataframes.         
@@ -111,8 +118,8 @@ def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
     # get number of rows
     num_rows = int(dataframe.shape[0])
     frame_size_est = row_size_est * num_rows
-    # at scale dataframes seem to compress around 3.5-4.5 times as parquet.        
-    ## TODO: should build a real regression to calc this!
+    # at scale dataframes seem to compress around 3.5-4.5 times as parquet.
+    # TODO: should build a real regression to calc this!
     compression_ratio = 4
     # 60MB compressed is ideal for Spectrum
     ideal_size = compression_ratio * (60 * float(1 << 20))
@@ -143,31 +150,23 @@ ideal size: {ideal_size} bytes
     return tuple(sized_frames)
 
 
-
-def publish(bucket:str, key:str, partitions:iter, dataframe:pd.DataFrame) -> None:
+def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) -> None:
     logger.info("Checking params...")
     check_dataframe_for_timedelta(dataframe)
-    check_partitions(partitions,dataframe)
+    check_partitions(partitions, dataframe)
     logger.info("Params valid.")
     logger.debug("Begin writing to S3..")
 
     files = []
     for frame in _sized_dataframes(dataframe):
-        _gen_parquet_to_s3( bucket=bucket, 
-                            key=key,
-                            dataframe=dataframe, 
-                            partitions=partitions)
-        
-        published_files = _assign_partition_meta(   bucket=bucket, 
-                                                    key=key, 
-                                                    dataframe=dataframe)
+        _gen_parquet_to_s3(bucket=bucket,
+                           key=key,
+                           dataframe=dataframe,
+                           partitions=partitions)
+
+        published_files = _assign_partition_meta(bucket=bucket,
+                                                 key=key,
+                                                 dataframe=dataframe)
         files = files + published_files
     logger.debug("Done writing to S3.")
     return files
-
-
-
-
-
-
-

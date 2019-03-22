@@ -94,7 +94,6 @@ class S3NamingHelper:
 
         return tuple([True, path])
 
-
     def _safe_chars(self) -> list:
         safe = list(range(ord('a'), ord('z')+1))
         safe += list(range(ord('A'), ord('Z')+1))
