@@ -71,6 +71,9 @@ a lot of pre-filtering involves trimming down your dataset based on the values a
 ## Gotchas
 - filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
 
+- when using `get_diff_partition_values` remembering which set you want can be confusing. You can refer to this diagram: 
+![venn diagram of reverse value](./assets/s3parq_get_diff_partition_values.png)
+
 ## Contribution
 We welcome pull requests!
 Some basic guidelines:
