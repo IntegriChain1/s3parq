@@ -1,6 +1,9 @@
 import pytest
 import pandas as pd
 import multiprocessing as mp
+import random
+import datetime
+from string import ascii_lowercase
 import moto
 import boto3
 from mock import patch
@@ -8,16 +11,8 @@ from dfmock import DFMock
 from collections import OrderedDict
 
 from .mock_helper import MockHelper
-from s3parq.fetch_parq import (
-    _get_all_files_list, 
-    _get_filtered_key_list,
-    _get_partitions_and_types, 
-    _get_partition_value_data_types,
-    _parse_partitions_and_values, 
-    _s3_parquet_to_dataframe,
-    _validate_matching_filter_data_type
-)
-from s3parq.fetch_parq import *
+
+import s3parq.fetch_parq as fetch_parq
 from s3parq.publish_parq import publish
 
 from typing import Dict
@@ -26,17 +21,17 @@ from typing import Dict
 @moto.mock_s3
 class Test():
 
+    def rand_string(self):
+        return ''.join([random.choice(ascii_lowercase) for x in range(0, 10)])
+
     # TODO: refactor to create local functions and cut Mockhelper
     def setup_s3(self):
-        def rand_string():
-            return ''.join([random.choice(ascii_lowercase) for x in range(0, 10)])
-        
-        bucket = rand_string()
-        key = rand_string()
+        bucket = self.rand_string()
+        key = self.rand_string()
 
         s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket= bucket)
-        
+        s3_client.create_bucket(Bucket=bucket)
+
         return bucket, key
 
     def mock_publish(self, bucket, key, partition_types: Dict[str, str]):
@@ -47,7 +42,8 @@ class Test():
         dfmock.count = 10
 
         # add partition columns
-        columns = dict({key: {"option_count": 3, "option_type": value} for key, value in partition_types.items()})
+        columns = dict({key: {"option_count": 3, "option_type": value}
+                        for key, value in partition_types.items()})
 
         # add one actual data column, called metrics
         columns["metrics"] = "int"
@@ -67,9 +63,9 @@ class Test():
             'partitions': partitions
         }
         published_files = publish(bucket=bucket,
-                                    key=key,
-                                    dataframe=df,
-                                    partitions=partitions)
+                                  key=key,
+                                  dataframe=df,
+                                  partitions=partitions)
 
         return bucket, df, partitions, published_files
 
@@ -89,7 +85,7 @@ class Test():
             }]
         }
         with pytest.raises(ValueError):
-            fetch(**inv_fil_params)
+            fetch_parq.fetch(**inv_fil_params)
 
         inv_fil_params["filters"] = [{
             "partition": "fake-part",
@@ -98,7 +94,7 @@ class Test():
         }]
 
         with pytest.raises(ValueError):
-            fetch(**inv_fil_params)
+            fetch_parq.fetch(**inv_fil_params)
 
     # Test that all files matching key gets listed out
     def test_fetch_files_list(self):
@@ -109,7 +105,7 @@ class Test():
         key = uploaded['key']
         test_files = uploaded['files']
 
-        fetched_files = _get_all_files_list(bucket, key)
+        fetched_files = fetch_parq._get_all_files_list(bucket, key)
 
         test_files_keyed = list(
             map(lambda x: key + x, test_files))
@@ -125,7 +121,7 @@ class Test():
         key = uploaded['key']
         test_files = uploaded['files']
 
-        fetched_files = _get_all_files_list(bucket, key)
+        fetched_files = fetch_parq._get_all_files_list(bucket, key)
 
         test_files_keyed = list(
             map(lambda x: key + x, test_files))
@@ -159,7 +155,7 @@ class Test():
         })
 
         key = "key/"
-        test_parsed_part = _parse_partitions_and_values(parts, key)
+        test_parsed_part = fetch_parq._parse_partitions_and_values(parts, key)
 
         assert parsed_parts == test_parsed_part
 
@@ -175,7 +171,7 @@ class Test():
         parsed_parts = OrderedDict({})
 
         key = "key/"
-        test_parsed_part = _parse_partitions_and_values(parts, key)
+        test_parsed_part = fetch_parq._parse_partitions_and_values(parts, key)
 
         assert parsed_parts == test_parsed_part
 
@@ -187,14 +183,15 @@ class Test():
         s3_client = boto3.client('s3')
         files = s3_client.list_objects_v2(Bucket=bucket)
         first_file_key = files["Contents"][0]["Key"]
-        partition_metadata = _get_partitions_and_types(first_file_key, bucket)
+        partition_metadata = fetch_parq._get_partitions_and_types(
+            first_file_key, bucket)
 
         assert partition_metadata == {"string_col": "string",
-                                    "int_col": "integer",
-                                    "float_col": "float",
-                                    "bool_col": "boolean",
-                                    "datetime_col": "datetime"
-                                    }
+                                      "int_col": "integer",
+                                      "float_col": "float",
+                                      "bool_col": "boolean",
+                                      "datetime_col": "datetime"
+                                      }
 
     # Test that it errors if data types are mismatched
     def test_mismatch_argument_data_types(self):
@@ -237,7 +234,7 @@ class Test():
             ])
         })
 
-        typed_parts = _get_partition_value_data_types(
+        typed_parts = fetch_parq._get_partition_value_data_types(
             parsed_parts=parsed_parts,
             part_types=part_types
         )
@@ -262,7 +259,7 @@ class Test():
         })
 
         with pytest.raises(ValueError):
-            _get_partition_value_data_types(
+            fetch_parq._get_partition_value_data_types(
                 parsed_parts=parsed_parts,
                 part_types=part_types
             )
@@ -283,19 +280,20 @@ class Test():
             "float_col": "float"
         }
         bucket, df, partitions, published_files = self.mock_publish(
-                                                        bucket=bucket,
-                                                        key=key,
-                                                        partition_types=part_types
-                                                    )
-        
-        fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="int_col")
+            bucket=bucket,
+            key=key,
+            partition_types=part_types
+        )
+
+        fetched_max = fetch_parq.get_max_partition_value(
+            bucket=bucket, key=key, partition="int_col")
 
         # Test max of column is max of the fetched partition
         assert df["int_col"].max() == fetched_max
 
     # Test that the max function denies non-numeric partitions
     # TODO: add category when it becomes supported
-    def test_gets_max(self):
+    def test_gets_max_denies_text(self):
         key = "safekeyprefixname/safedatasetname"
         bucket = "safebucketname"
         part_types = {
@@ -303,22 +301,24 @@ class Test():
             "bool_col": "bool"
         }
         bucket, df, partitions, published_files = self.mock_publish(
-                                                        bucket=bucket,
-                                                        key=key,
-                                                        partition_types=part_types
-                                                    )
-        
-        with pytest.raises(ValueError):
-            fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="string_col")
+            bucket=bucket,
+            key=key,
+            partition_types=part_types
+        )
 
         with pytest.raises(ValueError):
-            fetched_max = get_max_partition_value(bucket=bucket, key=key, partition="bool_col")
+            fetched_max = fetch_parq.get_max_partition_value(
+                bucket=bucket, key=key, partition="string_col")
+
+        with pytest.raises(ValueError):
+            fetched_max = fetch_parq.get_max_partition_value(
+                bucket=bucket, key=key, partition="bool_col")
 
     # Test that it errors if filters have no matching partitiion
     def test_no_part_for_filter(self):
         part_types1 = {"fil-2": "int",
-                      "fil-1": "int"
-                      }
+                       "fil-1": "int"
+                       }
 
         filters1 = [{
             "partition": "fake-partition",
@@ -327,7 +327,8 @@ class Test():
         }]
 
         with pytest.raises(ValueError):
-            _validate_matching_filter_data_type(part_types1, filters1)
+            fetch_parq._validate_matching_filter_data_type(
+                part_types1, filters1)
 
         filters2 = [{
             "partition": "fil-1",
@@ -338,7 +339,8 @@ class Test():
         part_types2 = {"fil-1": "string"}
 
         with pytest.raises(ValueError):
-            _validate_matching_filter_data_type(part_types2, filters2)
+            fetch_parq._validate_matching_filter_data_type(
+                part_types2, filters2)
 
     # Test that it filters partitions fully
     def test_filter_all_parts(self):
@@ -381,7 +383,7 @@ class Test():
         key = "fake-key/"
         filters = filters
 
-        filter_paths = _get_filtered_key_list(
+        filter_paths = fetch_parq._get_filtered_key_list(
             typed_parts=typed_parts, filters=filters, key=key)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
@@ -426,7 +428,7 @@ class Test():
         key = "fake-key/"
         filters = filters
 
-        filter_paths = _get_filtered_key_list(
+        filter_paths = fetch_parq._get_filtered_key_list(
             typed_parts=typed_parts, key=key, filters=filters)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
@@ -464,7 +466,7 @@ class Test():
         key = "fake-key"
         filters = filters
 
-        filter_paths = _get_filtered_key_list(
+        filter_paths = fetch_parq._get_filtered_key_list(
             typed_parts=typed_parts, key=key, filters=filters)
 
         assert list.sort(filter_paths) == list.sort(fil_paths)
@@ -498,11 +500,12 @@ class Test():
         bucket = "foobucket"
         key = "fookey/"
         partitions = partition_types.keys()
-        bucket, df, partitions, published_files = self.mock_publish(bucket, key, partition_types)
+        bucket, df, partitions, published_files = self.mock_publish(
+            bucket, key, partition_types)
 
         # fetch._partition_metadata = mock.partition_metadata
         first_published_file = published_files[0]
-        response = _s3_parquet_to_dataframe(
+        response = fetch_parq._s3_parquet_to_dataframe(
             bucket=bucket, key=first_published_file, partition_metadata=partition_types)
 
         assert isinstance(response, pd.DataFrame)
@@ -521,6 +524,70 @@ class Test():
         # assert set(mock.dataframe.columns) == set(big_df.columns)
         # assert mock.dataframe.shape == big_df.shape
 
-    # Test pulling down a list of parquet files
-    def test_fetch_parquet_list(self):
-        pass
+    def test_get_partition_difference_string(self):
+        bucket = 'safebucket'
+        key = 'dataset'
+        partition = 'hamburger'
+        rando_values = [self.rand_string() for x in range(10)]
+        s3_paths = [
+            f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
+
+        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+                _get_all_files_list.return_value = s3_paths
+                _get_partitions_and_types.return_value = {
+                    "hamburger": "string"}
+
+                # partition values not in list values
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, rando_values[:-2])
+                assert deltas == [rando_values[-2]]
+                # list values not in partition values
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, rando_values, True)
+                assert deltas == [rando_values[-1]]
+
+    def test_get_partition_difference_datetime(self):
+        bucket = 'safebucket'
+        key = 'dataset'
+        partition = 'burgertime'
+        rando_values = [(datetime.datetime.now() - datetime.timedelta(
+            seconds=random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
+        s3_paths = [
+            f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values[:-1]]
+
+        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+                _get_all_files_list.return_value = s3_paths
+                _get_partitions_and_types.return_value = {
+                    "burgertime": "datetime"}
+
+                # partition values not in list values
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, rando_values[:-2])
+                assert deltas == [rando_values[-2]]
+
+                # list values not in partition values
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, rando_values, reverse=True)
+                assert deltas == [rando_values[-1]]
+
+    def test_get_partition_values(self):
+        bucket = 'safebucket'
+        key = 'dataset'
+        partition = 'burgertime'
+        rando_values = [(datetime.datetime.now() - datetime.timedelta(
+            seconds=random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
+        s3_paths = [
+            f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values]
+
+        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+                _get_all_files_list.return_value = s3_paths
+                _get_partitions_and_types.return_value = {
+                    "burgertime": "datetime"}
+
+                all_values = fetch_parq.get_all_partition_values(
+                    bucket=bucket, key=key, partition=partition)
+
+                assert set(all_values) == set(rando_values)

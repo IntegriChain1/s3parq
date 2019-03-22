@@ -7,6 +7,7 @@ from s3parq.publish_parq import publish
 from s3parq.fetch_parq import fetch
 import pandas as pd
 
+
 @moto.mock_s3
 def test_end_to_end():
     # make it
@@ -26,8 +27,7 @@ def test_end_to_end():
 
     s3_client.create_bucket(Bucket=bucket_name)
 
-    
-    ## pub it
+    # pub it
     publish(
         bucket=bucket_name,
         key=key,

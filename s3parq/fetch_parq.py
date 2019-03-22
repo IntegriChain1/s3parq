@@ -3,7 +3,7 @@ import boto3
 from collections import OrderedDict
 import datetime
 import operator
-from typing import Dict, List
+from typing import Dict, List, Any
 import multiprocessing as mp
 from multiprocessing import get_context
 import s3fs
@@ -77,6 +77,39 @@ Phase 3:
     Concat dataframes and return
 '''
 
+
+def get_all_partition_values(bucket: str, key: str, partition: str)->iter:
+    """retruns all values, correctly typed, for a given partition IN NO ORDER."""
+    all_files = _get_all_files_list(bucket, key)
+    partition_dtype = _get_partitions_and_types(
+        first_file_key=all_files[0], bucket=bucket)[partition]
+    partition_values = _parse_partitions_and_values(all_files, key=key)[
+        partition]
+    return [convert_type(val, partition_dtype) for val in partition_values]
+
+
+def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_diff: iter, reverse: bool = False) -> iter:
+    """ returns all the partition values in bucket/key that are not in values_to_diff.
+        ARGS:
+            values_to_diff: the iterable of values to compare the partition values to
+            reverse: if True, will look for the values in values_to_diff that are not in partition values (basically backwards)    
+     """
+    all_files = _get_all_files_list(bucket, key)
+    partition_dtype = _get_partitions_and_types(
+        first_file_key=all_files[0], bucket=bucket)[partition]
+    partition_values = _parse_partitions_and_values(all_files, key=key)[
+        partition]
+
+    partition_set = set(partition_values)
+    values_to_diff_set = set([str(val) for val in values_to_diff])
+
+    if reverse:
+        diff = values_to_diff_set - partition_set
+    else:
+        diff = partition_set - values_to_diff_set
+    return [convert_type(val, partition_dtype) for val in diff]
+
+
 def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
     ''' Returns the max value of the specified partition
     in the data type from the metadata.
@@ -85,26 +118,16 @@ def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
 
     all_files = _get_all_files_list(bucket=bucket, key=key)
 
-    partition_metadata = _get_partitions_and_types(
-        first_file_key=all_files[0], bucket=bucket)
+    partition_dtype = _get_partitions_and_types(
+        first_file_key=all_files[0], bucket=bucket)[partition]
     partition_values = _parse_partitions_and_values(
-        file_paths=all_files, key=key)
+        file_paths=all_files, key=key)[partition]
 
-    value = {}
-    metadata = {}
-    # Cut down to specified partition, keeping as dict for consistency
-    value[partition] = partition_values[partition]
-    metadata[partition] = partition_metadata[partition]
+    if partition_dtype in NON_NUM_TYPES:
+        raise ValueError(
+            f"Max cannot be used on partition types of {partition_dtype}")
 
-    if metadata[partition] in NON_NUM_TYPES:
-        raise ValueError(f"Max cannot be used on partition types of {metadata[partition]}")
-
-    typed_value = _get_partition_value_data_types(
-        parsed_parts=value, part_types=metadata)
-
-    max_partition_value = max(typed_value[partition])
-    
-    return max_partition_value
+    return max([convert_type(val, partition_dtype) for val in partition_values])
 
 
 def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: bool = True):
@@ -139,6 +162,23 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
                               parallel=parallel)
 
 
+def convert_type(val: Any, dtype: str)->Any:
+    """ converts a value to the given datatype"""
+    if dtype == 'string':
+        return str(val)
+    elif dtype == 'integer':
+        return int(val)
+    elif dtype == 'float':
+        return float(val)
+    elif dtype == 'datetime':
+        return datetime.datetime.strptime(
+            val, '%Y-%m-%d %H:%M:%S')
+    elif dtype == 'category':
+        return pd.Category(val)
+    elif dtype == 'bool':
+        return bool(val)
+
+
 def _get_partitions_and_types(first_file_key: str, bucket):
     ''' Fetch a list of all the partitions actually there and their 
     datatypes. List may be different than passed list if not being used
@@ -154,10 +194,8 @@ def _get_partitions_and_types(first_file_key: str, bucket):
         Key=first_file_key
     )
 
-    # save for repopulating parquet later
-    partition_metadata_str = first_file['Metadata']['partition_data_types']
-
-    partition_metadata = ast.literal_eval(partition_metadata_str)
+    partition_metadata = ast.literal_eval(
+        first_file['Metadata']['partition_data_types'])
 
     return partition_metadata
 
@@ -209,7 +247,6 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
     '''
     for part, values in parsed_parts.items():
         part_type = part_types[part]
-        # try:
         if (part_type == 'string') or (part_type == 'category'):
             continue
         elif (part_type == 'int') or (part_type == 'integer'):
@@ -221,14 +258,12 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict):
                 map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
         elif (part_type == 'bool') or (part_type == 'boolean'):
             parsed_parts[part] = set(map(bool, values))
-        # except:
-        #    raise ValueError(
-        #        f"Invalid partition type: {part_type} does not match partition {part}")
 
     return parsed_parts
 
-
 # TODO: Neaten up?
+
+
 def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
     ''' Create list of all "paths" to files after the filtered partitions
     are set ie all non-matching partitions are excluded.
@@ -253,7 +288,7 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
             for value in part[1]:
                 mapped_keys = list(map(
                     (lambda x: str(x) +
-                               str(part[0]) + "=" + str(value) + "/"),
+                     str(part[0]) + "=" + str(value) + "/"),
                     previous_fil_keys
                 ))
                 new_filter_keys = new_filter_keys + mapped_keys
@@ -286,7 +321,8 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata, parallel=Tr
                 pool.close()
                 pool.join()
         else:
-            append_to_temp(_s3_parquet_to_dataframe(bucket, path, partition_metadata))
+            append_to_temp(_s3_parquet_to_dataframe(
+                bucket, path, partition_metadata))
 
     return pd.concat(temp_frames)
 
@@ -313,24 +349,7 @@ def _repopulate_partitions(partition_string: str, partition_metadata) -> tuple:
             partitions[k] = v
 
     for key, val in partitions.items():
-        # try
-        dtype = partition_metadata[key]
-        # except:
-        #    raise ValueError(
-        #        f"{key} is not a recognized partition in the current s3 meta.")
-        if dtype == 'string':
-            partitions[key] = str(val)
-        elif dtype == 'integer':
-            partitions[key] = int(val)
-        elif dtype == 'float':
-            partitions[key] = float(val)
-        elif dtype == 'datetime':
-            partitions[key] = datetime.datetime.strptime(
-                val, '%Y-%m-%d %H:%M:%S')
-        elif dtype == 'category':
-            partitions[key] = pd.Category(val)
-        elif dtype == 'bool':
-            partitions[key] = bool(val)
+        partitions[key] = convert_type(val, partition_metadata[key])
     return partitions
 
 
