@@ -76,14 +76,24 @@ Phase 3:
     Transform files to dataframes
     Concat dataframes and return
 '''
-def get_diff_partition_values(bucket:str, key:str, partition: str, values_to_diff: iter) -> iter:
-    """ returns all the partition values in bucket/key that are not in values_to_diff. """
+def get_diff_partition_values(bucket:str, key:str, partition: str, values_to_diff: iter, reverse:bool=False) -> iter:
+    """ returns all the partition values in bucket/key that are not in values_to_diff.
+        ARGS:
+            values_to_diff: the iterable of values to compare the partition values to
+            reverse: if True, will look for the values in values_to_diff that are not in partition values (basically backwards)    
+     """
     all_files = _get_all_files_list(bucket,key)
     partition_dtype = _get_partitions_and_types(
         first_file_key=all_files[0], bucket=bucket)[partition]
     partition_values = _parse_partitions_and_values(all_files, key=key)[partition]
-        
-    diff = set(partition_values) - set([str(val) for val in values_to_diff]) 
+    
+    partition_set = set(partition_values)
+    values_to_diff_set = set([str(val) for val in values_to_diff])    
+    
+    if reverse:
+        diff = values_to_diff_set - partition_set
+    else:
+        diff = partition_set - values_to_diff_set
     return [convert_type(val, partition_dtype) for val in diff]
 
 def get_max_partition_value(bucket: str, key: str, partition: str) -> any:

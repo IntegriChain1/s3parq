@@ -521,28 +521,39 @@ class Test():
         bucket = 'safebucket'
         key = 'dataset'
         partition='hamburger'
-        rando_values = [self.rand_string() for x in range(5)]
-        s3_paths = [f"{key}/{partition}={x}/12345.parquet" for x in rando_values]
+        rando_values = [self.rand_string() for x in range(10)]
+        s3_paths = [f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
 
         with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
             with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
                 _get_all_files_list.return_value = s3_paths
                 _get_partitions_and_types.return_value = {"hamburger":"string"}
+                
+                ## partition values not in list values
+                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values[:-2])
+                assert deltas == [rando_values[-2]]
 
-                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values[:-1])
+                ## list values not in partition values
+                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values, reverse=True)
                 assert deltas == [rando_values[-1]]
+
 
     def test_get_partition_difference_datetime(self):
         bucket = 'safebucket'
         key = 'dataset'
         partition='burgertime'
         rando_values = [(datetime.datetime.now() - datetime.timedelta(seconds = random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
-        s3_paths = [f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values]
+        s3_paths = [f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values[:-1]]
 
         with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
             with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
                 _get_all_files_list.return_value = s3_paths
                 _get_partitions_and_types.return_value = {"burgertime":"datetime"}
 
-                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values[:-1])
+                ## partition values not in list values
+                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values[:-2])
+                assert deltas == [rando_values[-2]]
+
+                ## list values not in partition values
+                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values, reverse=True)
                 assert deltas == [rando_values[-1]]
