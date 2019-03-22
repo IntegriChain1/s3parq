@@ -76,6 +76,15 @@ Phase 3:
     Transform files to dataframes
     Concat dataframes and return
 '''
+def get_diff_partition_values(bucket:str, key:str, partition: str, values_to_diff: iter) -> iter:
+    """ returns all the partition values in bucket/key that are not in values_to_diff. """
+    all_files = _get_all_files_list(bucket,key)
+    partition_dtype = _get_partitions_and_types(
+        first_file_key=all_files[0], bucket=bucket)[partition]
+    partition_values = _parse_partitions_and_values(all_files, key=key)[partition]
+        
+    diff = set(partition_values) - set([str(val) for val in values_to_diff]) 
+    return [convert_type(val, partition_dtype) for val in diff]
 
 def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
     ''' Returns the max value of the specified partition
