@@ -15,41 +15,59 @@ This is an AWS-specific solution intended to serve as an interface between pytho
 
 we get data by dataset name. 
     
-    from s3_parq import S3Parq
+    import s3parq
 
     bucket = 'mybucket'
     key = 'path-in-bucket/to/my/dataset'
     dataframe = pd.DataFrame(['some_big_data'])
     
     ## writing to s3
-    parq = S3Parq(  bucket=bucket,
+    parq.fetch(  bucket=bucket,
                     key=key,
                     dataframe=dataframe, 
                     partitions= ['column1',
                                 'column2'])
-    parq.publish()
 
     ## reading from s3, getting only records with an id >= 150
-    parq = S3Parq(  bucket=bucket,
-                    key=key,
-                    dataframe=dataframe, 
-                    filter= {"partition":"id,
-                            "values":150, 
-                            "comparison":'>='})
-    retrieved_dataframe = parq.fetch()
-
+    pandas_dataframe = parq.fetch(  bucket=bucket,
+                                    key=key,
+                                    dataframe=dataframe, 
+                                    filter= {"partition":"id,
+                                    "values":150, 
+                                    "comparison":'>='})
+    
 
 ## Getting Existing Partition Values 
 a lot of pre-filtering involves trimming down your dataset based on the values already in another data set. To make that easier, s3parq provides a few super helpful helper functions: 
 
-    ## max value
+    partition = 'order_id'
 
-    ## partition values not in a list
+    ## max value for order_id column, correctly typed
+    max_val = parq.get_max_partition_value(bucket,
+                                 key,
+                                 partition)
+      
+    ## partition values not in a list of order_ids. 
+    ## if partition values are 1-6 would return [5,6] correctly typed.
+    list_of_vals = [0,1,2,3,4]
+    new_vals = parq.get_diff_partition_values(  bucket,
+                                                key,
+                                                partition,
+                                                list_of_vals)
 
     ## list values not in partition value list
-
+    ## if partition values are 3-8 would return [1,2] correctly typed.
+    list_of_vals = [1,2,3,4]
+    missing_vals = parq.get_diff_partition_values(  bucket,
+                                                    key,
+                                                    partition,
+                                                    list_of_vals,
+                                                    True)
     ## all values for a partition
-
+    all_vals = parq.get_all_partition_values(   bucket,
+                                                key,
+                                                partition)
+    
 ## Gotchas
 - filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
 

@@ -532,9 +532,8 @@ class Test():
                 ## partition values not in list values
                 deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values[:-2])
                 assert deltas == [rando_values[-2]]
-
                 ## list values not in partition values
-                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values, reverse=True)
+                deltas = fetch_parq.get_diff_partition_values(bucket,key,partition,rando_values,True)
                 assert deltas == [rando_values[-1]]
 
 
@@ -569,7 +568,7 @@ class Test():
             with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
                 _get_all_files_list.return_value = s3_paths
                 _get_partitions_and_types.return_value = {"burgertime":"datetime"}
-
+                
                 all_values = fetch_parq.get_all_partition_values(bucket=bucket,key=key,partition=partition)
 
                 assert set(all_values) == set(rando_values)
