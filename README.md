@@ -63,6 +63,16 @@ a lot of pre-filtering involves trimming down your dataset based on the values a
                                                     partition,
                                                     list_of_vals,
                                                     True)
+
+    ## df of values in one dataset's partition and not another's
+    ## this works by input -> where extra values would be, and comparison -> where they might not be
+    ## similar to the get_diff_partition_values but handles it at the dataset level
+    missing_data = parq.fetch_diff( input_bucket, 
+                                    input_key, 
+                                    comparison_bucket, 
+                                    comparison_key, 
+                                    partition)
+
     ## all values for a partition
     all_vals = parq.get_all_partition_values(   bucket,
                                                 key,
