@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 package_name = "s3parq"
-package_version = "0.0.1"
+package_version = "0.0.2"
 description = "Write and read/query s3 parquet data using Athena/Spectrum/Hive style partitioning."
 
 
