@@ -1,4 +1,4 @@
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 from .s3parq import S3Parq
 
 from s3parq.fetch_parq import fetch
