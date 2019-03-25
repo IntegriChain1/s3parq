@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import numpy as np
 import multiprocessing as mp
 import random
 import datetime
@@ -34,7 +35,7 @@ class Test():
 
         return bucket, key
 
-    def mock_publish(self, bucket, key, partition_types: Dict[str, str]):
+    def mock_publish(self, partition_types: Dict[str, str], bucket="safebucketname", key='safekeyprefixname/safedatasetname'):
         mocker = MockHelper(count=100, s3=True)
         df = mocker.dataframe
         partitions = partition_types.keys()
@@ -53,7 +54,6 @@ class Test():
 
         # generate dataframe we will write
         df = dfmock.dataframe
-        key = 'safekeyprefixname/safedatasetname'
         bucket = mocker.s3_bucket
 
         defaults = {
@@ -486,6 +486,52 @@ class Test():
         - Concatenates the dataframes and returns them
     '''
 
+    # Test that handles full fetch when no files match
+    def test_fetch_when_none(self):
+        input_key = "burger-shipment/buns"
+        input_bucket = "loadingdock"
+        partitions = ["exp-date"]
+
+        part_types = {
+            "count": "int",
+            "price": "float",
+            "exp-date": "str"
+        }
+
+        fetched_dtypes = pd.Series(["int64", "float64", "object"], index=[
+                                   "count", "price", "exp-date"])
+
+        input_df = pd.DataFrame({
+            "count": [2, 4, 7, 9],
+            "price": [2.43, 1.23, 5.76, 3.28],
+            "exp-date": ["x", "z", "a", "zz"]
+        })
+
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket=input_bucket)
+
+        published_files = publish(bucket=input_bucket,
+                                  key=input_key,
+                                  dataframe=input_df,
+                                  partitions=partitions)
+
+        filters = [{
+            "partition": "exp-date",
+            "comparison": "==",
+            "values": ["not-there"]
+        }]
+
+        fetched = fetch_parq.fetch(
+            bucket=input_bucket,
+            key=input_key,
+            filters=filters,
+            parallel=False
+        )
+
+        # Testing that DF is empty and has the expected columns+dtypes
+        assert fetched.empty
+        assert fetched.dtypes.equals(fetched_dtypes)
+
     # captures from a single parquet path dataset
     def test_s3_parquet_to_dataframe(self):
         partition_types = {"string_col": "string",
@@ -501,7 +547,7 @@ class Test():
         key = "fookey/"
         partitions = partition_types.keys()
         bucket, df, partitions, published_files = self.mock_publish(
-            bucket, key, partition_types)
+            bucket=bucket, key=key, partition_types=partition_types)
 
         # fetch._partition_metadata = mock.partition_metadata
         first_published_file = published_files[0]
@@ -591,3 +637,61 @@ class Test():
                     bucket=bucket, key=key, partition=partition)
 
                 assert set(all_values) == set(rando_values)
+
+    # Test that the data in the input but not comparison is fetched
+    def test_fetches_diff(self):
+        input_key = "burger-shipment/buns"
+        input_bucket = "loadingdock"
+        comparison_key = "burger-inventory/buns"
+        comparison_bucket = "backroom"
+        partitions = ["exp-date"]
+
+        part_types = {
+            "count": "int",
+            "price": "float",
+            "exp-date": "string"
+        }
+
+        input_df = pd.DataFrame({
+            "count": [2, 4, 7, 9],
+            "price": [2.43, 1.23, 5.76, 3.28],
+            "exp-date": ["x", "z", "a", "zz"]
+        })
+        comparison_df = pd.DataFrame({
+            "count": [2, 3, 4, 9],
+            "price": [2.43, 4.35, 1.23, 3.28],
+            "exp-date": ["x", "y", "z", "zz"]
+        })
+
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket=input_bucket)
+        s3_client.create_bucket(Bucket=comparison_bucket)
+
+        published_files = publish(bucket=input_bucket,
+                                  key=input_key,
+                                  dataframe=input_df,
+                                  partitions=partitions)
+
+        published_files = publish(bucket=comparison_bucket,
+                                  key=comparison_key,
+                                  dataframe=comparison_df,
+                                  partitions=partitions)
+
+        test_df = pd.DataFrame({
+            "count": [7],
+            "price": [5.76],
+            "exp-date": ["a"]
+        })
+
+        fetched_diff = fetch_parq.fetch_diff(
+            input_bucket=input_bucket,
+            input_key=input_key,
+            comparison_bucket=comparison_bucket,
+            comparison_key=comparison_key,
+            partition=partitions[0],
+            parallel=False
+        )
+
+        # Test data knows these are single row-ed DFs, testing that data
+        #   like this cause pandas DF equals is ???
+        assert fetched_diff.iloc[0].equals(test_df.iloc[0])

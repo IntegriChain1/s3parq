@@ -78,7 +78,7 @@ Phase 3:
 '''
 
 
-def get_all_partition_values(bucket: str, key: str, partition: str)->iter:
+def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
     """retruns all values, correctly typed, for a given partition IN NO ORDER."""
     all_files = _get_all_files_list(bucket, key)
     partition_dtype = _get_partitions_and_types(
@@ -158,11 +158,52 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
                 files_to_load.append(file)
                 continue
 
+    if not (files_to_load):
+        empty_df_data = OrderedDict()
+
+        for column, data in partition_metadata.items():
+            data = dtype_to_pandas_dtype(data)
+            empty_df_data.update({column: pd.Series([], dtype=data)})
+
+        typed_empty_df = pd.DataFrame(empty_df_data)
+        return typed_empty_df
+
     return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata,
                               parallel=parallel)
 
 
-def convert_type(val: Any, dtype: str)->Any:
+def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, comparison_key: str, partition: str, parallel: bool = True) -> pd.DataFrame:
+    ''' Returns a dataframe of whats in the input dataset but not the comparison dataset by the specified partition
+        ARGS:
+            input_bucket (str): the bucket of the dataset to start from
+            input_key (str): the key to the dataset to start from
+            comparison_bucket (str): the bucket of the dataset to compare against
+            comparison_key (str): the key to the dataset to compare against
+            partition (str): the partition whos values to compare
+    '''
+    S3NamingHelper().validate_bucket_name(input_bucket)
+    S3NamingHelper().validate_bucket_name(comparison_bucket)
+
+    comparison_values = get_all_partition_values(
+        bucket=comparison_bucket, key=comparison_key, partition=partition)
+
+    diff_values = get_diff_partition_values(
+        bucket=input_bucket,
+        key=input_key,
+        partition=partition,
+        values_to_diff=comparison_values
+    )
+
+    filters = [{
+        "partition": partition,
+        "comparison": "==",
+        "values": diff_values
+    }]
+
+    return fetch(bucket=input_bucket, key=input_key, filters=filters, parallel=parallel)
+
+
+def convert_type(val: Any, dtype: str) -> Any:
     """ converts a value to the given datatype"""
     if dtype == 'string':
         return str(val)
@@ -177,6 +218,17 @@ def convert_type(val: Any, dtype: str)->Any:
         return pd.Category(val)
     elif dtype == 'bool':
         return bool(val)
+
+
+def dtype_to_pandas_dtype(dtype: str):
+    if dtype == "integer":
+        dtype = "int"
+    elif dtype == "string":
+        dtype = "str"
+    elif dtype == "boolean":
+        dtype = "bool"
+
+    return dtype
 
 
 def _get_partitions_and_types(first_file_key: str, bucket):
