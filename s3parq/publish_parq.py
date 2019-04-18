@@ -59,7 +59,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     logger.debug("Done writing to location.")
 
 
-def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame) -> List[str]:
+def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: iter) -> List[str]:
     """ assigns the dataset partition meta to all keys in the dataset"""
     s3_client = boto3.client('s3')
     all_files = []
@@ -72,15 +72,16 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame) -> Li
         s3_client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj}, Key=obj,
                               Metadata={'partition_data_types': str(
                                   _parse_dataframe_col_types(
-                                      dataframe=dataframe)
+                                      dataframe=dataframe, partitions=partitions)
                               )}, MetadataDirective='REPLACE')
         logger.debug("Done appending metadata.")
     return all_files
 
 
-def _parse_dataframe_col_types(dataframe: pd.DataFrame) -> dict:
+def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: iter) -> dict:
     """ Returns a dict with the column names as keys, the data types (in strings) as values."""
     logger.debug("Determining write metadata for publish...")
+    dataframe = pd.DataFrame(dataframe[partitions])
     dtypes = {}
     for col, dtype in dataframe.dtypes.items():
         dtype = str(dtype)
@@ -166,7 +167,8 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) ->
 
         published_files = _assign_partition_meta(bucket=bucket,
                                                  key=key,
-                                                 dataframe=dataframe)
+                                                 dataframe=dataframe,
+                                                 partitions=partitions)
         files = files + published_files
     logger.debug("Done writing to S3.")
     return files
