@@ -105,7 +105,7 @@ class Test:
                 meta = s3_client.get_object(
                     Bucket=bucket, Key=obj['Key'])['Metadata']
                 assert meta['partition_data_types'] == str(
-                    {"grouped_col": "string", "text_col": "string", "int_col": "integer", "float_col": "float"})
+                    {"grouped_col": "string"})
     '''
 
 
