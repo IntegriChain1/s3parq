@@ -5,7 +5,7 @@ from s3parq.fetch_parq import fetch, get_max_partition_value, fetch_diff
 import pandas as pd
 import sys
 import logging
-from typing import Iterable
+from typing import Iterable, List
 
 
 class S3Parq:
@@ -14,15 +14,14 @@ class S3Parq:
                 bucket: str,
                 key: str,
                 dataframe: pd.DataFrame,
-                partitions: Iterable[str]) -> None:
+                partitions: Iterable[str]) -> List:
 
-        pub = publish(
+        return publish(
             dataframe=dataframe,
             bucket=bucket,
             key=key,
             partitions=partitions
         )
-        pub.publish()
 
     def fetch(self,
               bucket: str,
@@ -32,7 +31,8 @@ class S3Parq:
 
         return fetch(key=key,
                      bucket=bucket,
-                     filters=kwargs.get('partitions', dict())
+                     filters=kwargs.get('partitions', dict()),
+                     parallel=kwargs.get('parallel',True)
                      )
 
     def fetch_diff(self,
