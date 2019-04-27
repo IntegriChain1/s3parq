@@ -78,10 +78,10 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
     return all_files
 
 
-def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: iter) -> dict:
+def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
     """ Returns a dict with the column names as keys, the data types (in strings) as values."""
     logger.debug("Determining write metadata for publish...")
-    dataframe = pd.DataFrame(dataframe[partitions])
+    dataframe = dataframe[partitions]
     dtypes = {}
     for col, dtype in dataframe.dtypes.items():
         dtype = str(dtype)

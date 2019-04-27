@@ -136,7 +136,6 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     S3NamingHelper().validate_bucket_name(bucket)
 
     all_files = _get_all_files_list(bucket, key)
-
     partition_metadata = _get_partitions_and_types(all_files[0], bucket)
 
     _validate_matching_filter_data_type(partition_metadata, filters)
@@ -157,16 +156,12 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
             if file.startswith(prefix):
                 files_to_load.append(file)
                 continue
-
-    if not (files_to_load):
-        empty_df_data = OrderedDict()
-
-        for column, data in partition_metadata.items():
-            data = dtype_to_pandas_dtype(data)
-            empty_df_data.update({column: pd.Series([], dtype=data)})
-
-        typed_empty_df = pd.DataFrame(empty_df_data)
-        return typed_empty_df
+    ## if there is no data matching the filters, return an empty DataFrame
+    ## with correct headers and type
+    if len(files_to_load) < 1:
+        sacrifical_files = [all_files[0]]   
+        sacrifical_frame = _get_filtered_data(bucket=bucket, paths=sacrifical_files ,partition_metadata =partition_metadata, parallel=parallel)
+        return sacrifical_frame.head(0)
 
     return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata,
                               parallel=parallel)
@@ -375,7 +370,6 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata, parallel=Tr
         else:
             append_to_temp(_s3_parquet_to_dataframe(
                 bucket, path, partition_metadata))
-
     return pd.concat(temp_frames)
 
 
