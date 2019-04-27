@@ -38,7 +38,7 @@ class Test():
     def mock_publish(self, partition_types: Dict[str, str], bucket="safebucketname", key='safekeyprefixname/safedatasetname'):
         mocker = MockHelper(count=100, s3=True)
         df = mocker.dataframe
-        partitions = partition_types.keys()
+        partitions = list(partition_types.keys())
         dfmock = DFMock()
         dfmock.count = 10
 
