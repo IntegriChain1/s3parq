@@ -62,12 +62,15 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
 def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: iter) -> List[str]:
     """ assigns the dataset partition meta to all keys in the dataset"""
     s3_client = boto3.client('s3')
-    all_files = []
+    all_files_without_meta = []
     for obj in s3_client.list_objects(Bucket=bucket, Prefix=key)['Contents']:
         if obj['Key'].endswith(".parquet"):
-            all_files.append(obj['Key'])
+            head_obj = s3_client.head_object(Bucket=bucket, Key=obj['Key'])
+            if not 'partition_data_types' in head_obj['Metadata']:
+                all_files_without_meta.append(obj['Key'])
+    
 
-    for obj in all_files:
+    for obj in all_files_without_meta:
         logger.debug(f"Appending metadata to file {obj}..")
         s3_client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj}, Key=obj,
                               Metadata={'partition_data_types': str(
@@ -75,7 +78,7 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                                       dataframe=dataframe, partitions=partitions)
                               )}, MetadataDirective='REPLACE')
         logger.debug("Done appending metadata.")
-    return all_files
+    return all_files_without_meta
 
 
 def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
