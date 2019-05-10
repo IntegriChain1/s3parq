@@ -117,12 +117,12 @@ class MockHelper:
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             for x in range(count):
-                t = tempfile.NamedTemporaryFile(dir=tmp_dir)
-                head, tail = os.path.split(t.name)
-                temp_file_names.append(str(tail))
-                with open(t.name, 'rb') as data:
-                    s3_client.upload_fileobj(
-                        data, Bucket=bucket_name, Key=(key+tail))
+                with tempfile.NamedTemporaryFile(dir=tmp_dir) as t:
+                    head, tail = os.path.split(t.name)
+                    temp_file_names.append(str(tail))
+                    with open(t.name, 'rb') as data:
+                        s3_client.upload_fileobj(
+                            data, Bucket=bucket_name, Key=(key+"/"+tail + ".parquet"))
 
         retrieval_ops = {
             "bucket": bucket_name,

@@ -108,9 +108,12 @@ class Test():
         fetched_files = fetch_parq._get_all_files_list(bucket, key)
 
         test_files_keyed = list(
-            map(lambda x: key + x, test_files))
+            map(lambda x: key + "/" + x + ".parquet", test_files))
 
-        assert (test_files_keyed.sort()) == (fetched_files.sort())
+        test_files_keyed.sort()
+        fetched_files.sort()
+
+        assert (test_files_keyed == fetched_files)
 
     # Test that all files matching key get listed out even with pagination
     def test_fetch_files_list_more_than_1k(self):
@@ -124,9 +127,12 @@ class Test():
         fetched_files = fetch_parq._get_all_files_list(bucket, key)
 
         test_files_keyed = list(
-            map(lambda x: key + x, test_files))
+            map(lambda x: key + "/" + x + ".parquet", test_files))
 
-        assert (test_files_keyed.sort()) == (fetched_files.sort())
+        test_files_keyed.sort()
+        fetched_files.sort()
+
+        assert (test_files_keyed == fetched_files)
 
     # Test that all valid partitions are correctly parsed
     def test_get_partitions(self):
@@ -154,7 +160,7 @@ class Test():
             }
         })
 
-        key = "key/"
+        key = "key"
         test_parsed_part = fetch_parq._parse_partitions_and_values(parts, key)
 
         assert parsed_parts == test_parsed_part
@@ -170,7 +176,7 @@ class Test():
         ]
         parsed_parts = OrderedDict({})
 
-        key = "key/"
+        key = "key"
         test_parsed_part = fetch_parq._parse_partitions_and_values(parts, key)
 
         assert parsed_parts == test_parsed_part
@@ -380,13 +386,16 @@ class Test():
             'fake-key/fil-1=5.45/fil-2=2/fil-3=str/'
         ]
 
-        key = "fake-key/"
+        key = "fake-key"
         filters = filters
 
         filter_paths = fetch_parq._get_filtered_key_list(
             typed_parts=typed_parts, filters=filters, key=key)
 
-        assert list.sort(filter_paths) == list.sort(fil_paths)
+        filter_paths.sort()
+        fil_paths.sort()
+
+        assert filter_paths == fil_paths
 
     # Test that it filters partitions when only some are filtered
     def test_filter_some_parts(self):
@@ -425,13 +434,16 @@ class Test():
             'fake-key/fil-1=5.45/fil-2=2/fil-3=str_rng/'
         ]
 
-        key = "fake-key/"
+        key = "fake-key"
         filters = filters
 
         filter_paths = fetch_parq._get_filtered_key_list(
             typed_parts=typed_parts, key=key, filters=filters)
 
-        assert list.sort(filter_paths) == list.sort(fil_paths)
+        filter_paths.sort()
+        fil_paths.sort()
+
+        assert filter_paths == fil_paths
 
     # Test that it handles filters ridding everything
     def test_filter_to_none(self):
@@ -469,7 +481,10 @@ class Test():
         filter_paths = fetch_parq._get_filtered_key_list(
             typed_parts=typed_parts, key=key, filters=filters)
 
-        assert list.sort(filter_paths) == list.sort(fil_paths)
+        filter_paths.sort()
+        fil_paths.sort()
+
+        assert filter_paths == fil_paths
 
     # Test getting the file list for all paths
     def test_get_all_file_lists(self):
@@ -544,7 +559,7 @@ class Test():
         print(f"Key is: {key}")
 
         bucket = "foobucket"
-        key = "fookey/"
+        key = "fookey"
         partitions = partition_types.keys()
         bucket, df, partitions, published_files = self.mock_publish(
             bucket=bucket, key=key, partition_types=partition_types)
