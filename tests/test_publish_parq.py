@@ -71,8 +71,8 @@ class Test:
         columns, dataframe = self.setup_df()
         bucket, key = self.setup_s3()
         partitions = columns[:1]
-        with patch('s3_parq.publish_parq.boto3', return_value=True) as mock_boto3:
-            with patch('s3_parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
+        with patch('s3parq.publish_parq.boto3', return_value=True) as mock_boto3:
+            with patch('s3parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
                 parq._gen_parquet_to_s3(bucket, key, dataframe, partitions)
                 arg, kwarg = mock_method.call_args
                 assert kwarg['partition_cols'] == partitions
