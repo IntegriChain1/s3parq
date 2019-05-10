@@ -359,17 +359,18 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata, parallel=Tr
     def append_to_temp(frame):
         temp_frames.append(frame)
 
-    for path in paths:
-        if parallel:
-            with get_context("spawn").Pool() as pool:
-                for path in paths:
-                    append_to_temp(
-                        pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
-                pool.close()
-                pool.join()
-        else:
+    if parallel:
+        with get_context("spawn").Pool() as pool:
+            for path in paths:
+                append_to_temp(
+                    pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
+            pool.close()
+            pool.join()
+    else:
+        for path in paths:
             append_to_temp(_s3_parquet_to_dataframe(
                 bucket, path, partition_metadata))
+                
     return pd.concat(temp_frames)
 
 

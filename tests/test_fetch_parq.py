@@ -425,13 +425,16 @@ class Test():
             'fake-key/fil-1=5.45/fil-2=2/fil-3=str_rng/'
         ]
 
-        key = "fake-key/"
+        key = "fake-key"
         filters = filters
 
         filter_paths = fetch_parq._get_filtered_key_list(
             typed_parts=typed_parts, key=key, filters=filters)
 
-        assert list.sort(filter_paths) == list.sort(fil_paths)
+        filter_paths.sort()
+        fil_paths.sort()
+
+        assert filter_paths == fil_paths
 
     # Test that it handles filters ridding everything
     def test_filter_to_none(self):
