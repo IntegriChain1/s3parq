@@ -285,12 +285,12 @@ def _get_all_files_list(bucket, key) -> list:
                             'Prefix': key}
     page_iterator = paginator.paginate(**operation_parameters)
     for page in page_iterator:
-        if "Contents" in page.keys():
-            for item in page['Contents']:
-                if item['Key'].endswith('.parquet'):
-                    objects_in_bucket.append(item['Key'])
-        else:
-            pass
+        if not "Contents" in page.keys():
+            break
+
+        for item in page['Contents']:
+            if item['Key'].endswith('.parquet'):
+                objects_in_bucket.append(item['Key'])
 
     return objects_in_bucket
 
