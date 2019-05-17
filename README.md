@@ -1,5 +1,6 @@
 # s3parq
 Parquet file management in S3 for hive-style partitioned data
+[![Coverage Status](https://coveralls.io/repos/github/IntegriChain1/s3parq/badge.svg?branch=master)](https://coveralls.io/github/IntegriChain1/s3parq?branch=master)
 
 ## What is this? 
 In many ways, parquet standards are still the wild west of data. Depending on your partitioning style, metadata store strategy etc. you can tackle the big data beast in a multitude of different ways. 
