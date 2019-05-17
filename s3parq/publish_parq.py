@@ -11,6 +11,13 @@ from typing import List
 logger = logging.getLogger(__name__)
 
 
+def check_empty_dataframe(dataframe: pd.DataFrame) -> None:
+    """ Make sure that the dataframe being published is not empty. """
+    if dataframe.empty:
+        no_data_message = "Empty dataframes cannot be published."
+        raise ValueError(no_data_message)
+
+
 def check_dataframe_for_timedelta(dataframe: pd.DataFrame)->None:
     """Pyarrow can't do timedelta."""
     dtypes = set(dataframe.columns)
@@ -63,11 +70,14 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
     """ assigns the dataset partition meta to all keys in the dataset"""
     s3_client = boto3.client('s3')
     all_files_without_meta = []
-    for obj in s3_client.list_objects(Bucket=bucket, Prefix=key)['Contents']:
-        if obj['Key'].endswith(".parquet"):
-            head_obj = s3_client.head_object(Bucket=bucket, Key=obj['Key'])
-            if not 'partition_data_types' in head_obj['Metadata']:
-                all_files_without_meta.append(obj['Key'])
+    paginator = s3_client.get_paginator('list_objects')
+    page_iterator = paginator.paginate(Bucket=bucket, Prefix=key)
+    for page in page_iterator:
+        for obj in page['Contents']:
+            if obj['Key'].endswith(".parquet"):
+                head_obj = s3_client.head_object(Bucket=bucket, Key=obj['Key'])
+                if not 'partition_data_types' in head_obj['Metadata']:
+                    all_files_without_meta.append(obj['Key'])
     
 
     for obj in all_files_without_meta:
@@ -156,6 +166,7 @@ ideal size: {ideal_size} bytes
 
 def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) -> None:
     logger.info("Checking params...")
+    check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
     check_partitions(partitions, dataframe)
     logger.info("Params valid.")
