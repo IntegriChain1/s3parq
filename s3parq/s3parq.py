@@ -27,7 +27,7 @@ class S3Parq:
               bucket: str,
               key: str,
               **kwargs
-              ) -> None:
+              ) -> pd.DataFrame:
 
         return fetch(key=key,
                      bucket=bucket,
@@ -41,6 +41,7 @@ class S3Parq:
         comparison_bucket: str, 
         comparison_key: str, 
         partition: str, 
+        reverse: bool = False,
         parallel: bool = True
     ) -> pd.DataFrame:
         return fetch_diff(
@@ -49,6 +50,7 @@ class S3Parq:
             comparison_bucket = comparison_bucket, 
             comparison_key = comparison_key, 
             partition = partition, 
+            reverse = reverse,
             parallel = parallel
         )
 

@@ -93,6 +93,15 @@ class Test:
             set(zip(dataframe.int_col, dataframe.float_col,
                     dataframe.text_col, dataframe.grouped_col)) == set()
 
+    def test_reject_empty_dataframe(self):
+        dataframe = pd.DataFrame()
+        bucket, key = self.setup_s3()
+        s3_path = f"s3://{bucket}/{key}"
+
+        with pytest.raises(ValueError):
+            parq.publish(bucket=bucket, key=key,
+                        dataframe=dataframe, partitions=[])
+
     def test_set_metadata_correctly(self):
         columns, dataframe = self.setup_df()
         bucket, key = self.setup_s3()

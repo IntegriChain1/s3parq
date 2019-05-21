@@ -710,3 +710,57 @@ class Test():
         # Test data knows these are single row-ed DFs, testing that data
         #   like this cause pandas DF equals is ???
         assert fetched_diff.iloc[0].equals(test_df.iloc[0])
+
+    # Test that the dataframes are fetched properly when one side is empty and the other isnt
+    def test_fetches_diff_none(self):
+        input_key = "clay/beads"
+        input_bucket = "kiln"
+        comparison_key = "new-case"
+        comparison_bucket = "storefront"
+        partitions = ["price"]
+
+        part_types = {
+            "count": "int",
+            "price": "float"
+        }
+
+        input_df = pd.DataFrame({
+            "count": [2, 4, 7, 9],
+            "price": [2.43, 1.23, 5.76, 3.28]
+        })
+
+        s3_client = boto3.client('s3')
+        s3_client.create_bucket(Bucket=input_bucket)
+        s3_client.create_bucket(Bucket=comparison_bucket)
+
+        published_files = publish(bucket=input_bucket,
+                                  key=input_key,
+                                  dataframe=input_df,
+                                  partitions=partitions)
+
+        fetched_diff = fetch_parq.fetch_diff(
+            input_bucket=input_bucket,
+            input_key=input_key,
+            comparison_bucket=comparison_bucket,
+            comparison_key=comparison_key,
+            partition=partitions[0],
+            parallel=False
+        )
+
+        assert fetched_diff.empty
+
+        fetched_diff_reverse = fetch_parq.fetch_diff(
+            input_bucket=input_bucket,
+            input_key=input_key,
+            comparison_bucket=comparison_bucket,
+            comparison_key=comparison_key,
+            partition=partitions[0],
+            reverse=True,
+            parallel=False
+        )
+
+        fetched_diff_reverse.sort_index(inplace=True)
+        input_df.sort_index(inplace=True)
+
+        assert fetched_diff_reverse['count'].equals(input_df['count'])
+        assert fetched_diff_reverse['price'].equals(input_df['price'])

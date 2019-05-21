@@ -81,6 +81,10 @@ Phase 3:
 def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
     """retruns all values, correctly typed, for a given partition IN NO ORDER."""
     all_files = _get_all_files_list(bucket, key)
+
+    if not all_files:
+        return []
+
     partition_dtype = _get_partitions_and_types(
         first_file_key=all_files[0], bucket=bucket)[partition]
     partition_values = _parse_partitions_and_values(all_files, key=key)[
@@ -95,6 +99,14 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
             reverse: if True, will look for the values in values_to_diff that are not in partition values (basically backwards)    
      """
     all_files = _get_all_files_list(bucket, key)
+
+    if not all_files:
+        if reverse:
+            diff = set([str(val) for val in values_to_diff])
+            return diff
+        else:
+            return []
+
     partition_dtype = _get_partitions_and_types(
         first_file_key=all_files[0], bucket=bucket)[partition]
     partition_values = _parse_partitions_and_values(all_files, key=key)[
@@ -102,6 +114,12 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
 
     partition_set = set(partition_values)
     values_to_diff_set = set([str(val) for val in values_to_diff])
+
+    if not values_to_diff:
+        if reverse:
+            return []
+        else:
+            return partition_set
 
     if reverse:
         diff = values_to_diff_set - partition_set
@@ -117,6 +135,9 @@ def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
     S3NamingHelper().validate_bucket_name(bucket_name=bucket)
 
     all_files = _get_all_files_list(bucket=bucket, key=key)
+
+    if not all_files:
+        return None
 
     partition_dtype = _get_partitions_and_types(
         first_file_key=all_files[0], bucket=bucket)[partition]
@@ -136,6 +157,10 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     S3NamingHelper().validate_bucket_name(bucket)
 
     all_files = _get_all_files_list(bucket, key)
+
+    if not all_files:
+        return pd.DataFrame()
+
     partition_metadata = _get_partitions_and_types(all_files[0], bucket)
 
     _validate_matching_filter_data_type(partition_metadata, filters)
@@ -156,18 +181,19 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
             if file.startswith(prefix):
                 files_to_load.append(file)
                 continue
-    ## if there is no data matching the filters, return an empty DataFrame
-    ## with correct headers and type
+    # if there is no data matching the filters, return an empty DataFrame
+    # with correct headers and type
     if len(files_to_load) < 1:
-        sacrifical_files = [all_files[0]]   
-        sacrifical_frame = _get_filtered_data(bucket=bucket, paths=sacrifical_files ,partition_metadata =partition_metadata, parallel=parallel)
+        sacrifical_files = [all_files[0]]
+        sacrifical_frame = _get_filtered_data(
+            bucket=bucket, paths=sacrifical_files, partition_metadata=partition_metadata, parallel=parallel)
         return sacrifical_frame.head(0)
 
     return _get_filtered_data(bucket=bucket, paths=files_to_load, partition_metadata=partition_metadata,
                               parallel=parallel)
 
 
-def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, comparison_key: str, partition: str, parallel: bool = True) -> pd.DataFrame:
+def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, comparison_key: str, partition: str, reverse: bool = False, parallel: bool = True) -> pd.DataFrame:
     ''' Returns a dataframe of whats in the input dataset but not the comparison dataset by the specified partition
         ARGS:
             input_bucket (str): the bucket of the dataset to start from
@@ -186,7 +212,8 @@ def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, compar
         bucket=input_bucket,
         key=input_key,
         partition=partition,
-        values_to_diff=comparison_values
+        values_to_diff=comparison_values,
+        reverse=reverse
     )
 
     filters = [{
@@ -258,6 +285,9 @@ def _get_all_files_list(bucket, key) -> list:
                             'Prefix': key}
     page_iterator = paginator.paginate(**operation_parameters)
     for page in page_iterator:
+        if not "Contents" in page.keys():
+            break
+
         for item in page['Contents']:
             if item['Key'].endswith('.parquet'):
                 objects_in_bucket.append(item['Key'])
@@ -370,7 +400,7 @@ def _get_filtered_data(bucket: str, paths: list, partition_metadata, parallel=Tr
         for path in paths:
             append_to_temp(_s3_parquet_to_dataframe(
                 bucket, path, partition_metadata))
-                
+
     return pd.concat(temp_frames)
 
 
