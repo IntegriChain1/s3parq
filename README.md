@@ -15,7 +15,7 @@ This is an AWS-specific solution intended to serve as an interface between pytho
 
 We get data by dataset name. 
     
-    import s3parq
+    import s3parq as parq
 
     bucket = 'mybucket'
     key = 'path-in-bucket/to/my/dataset'
@@ -31,7 +31,6 @@ We get data by dataset name.
     ## reading from s3, getting only records with an id >= 150
     pandas_dataframe = parq.fetch(  bucket=bucket,
                                     key=key,
-                                    dataframe=dataframe, 
                                     filter= {"partition":'id',
                                     "values":150, 
                                     "comparison":'>='})
@@ -79,9 +78,9 @@ A lot of pre-filtering involves trimming down your dataset based on the values a
                                                 partition)
     
 ## Gotchas
-- filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
+- Filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
 
-- when using `get_diff_partition_values` remembering which set you want can be confusing. You can refer to these diagrams: 
+- When using `get_diff_partition_values` remembering which set you want can be confusing. You can refer to these diagrams: 
 ![venn diagram of reverse value](./assets/s3parq_get_diff_partition_values.png)
 ![table of difference values](./assets/s3parq_diff_table.png)
 
