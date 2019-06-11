@@ -13,7 +13,7 @@ This is an AWS-specific solution intended to serve as an interface between pytho
  
 ## Basic Usage
 
-we get data by dataset name. 
+We get data by dataset name. 
     
     import s3parq
 
@@ -32,13 +32,13 @@ we get data by dataset name.
     pandas_dataframe = parq.fetch(  bucket=bucket,
                                     key=key,
                                     dataframe=dataframe, 
-                                    filter= {"partition":"id,
+                                    filter= {"partition":'id',
                                     "values":150, 
                                     "comparison":'>='})
     
 
 ## Getting Existing Partition Values 
-a lot of pre-filtering involves trimming down your dataset based on the values already in another data set. To make that easier, s3parq provides a few super helpful helper functions: 
+A lot of pre-filtering involves trimming down your dataset based on the values already in another data set. To make that easier, s3parq provides a few super helpful helper functions: 
 
     partition = 'order_id'
 
@@ -81,8 +81,9 @@ a lot of pre-filtering involves trimming down your dataset based on the values a
 ## Gotchas
 - filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
 
-- when using `get_diff_partition_values` remembering which set you want can be confusing. You can refer to this diagram: 
+- when using `get_diff_partition_values` remembering which set you want can be confusing. You can refer to these diagrams: 
 ![venn diagram of reverse value](./assets/s3parq_get_diff_partition_values.png)
+![table of difference values](./assets/s3parq_diff_table.png)
 
 ## Contribution
 We welcome pull requests!
