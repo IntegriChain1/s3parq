@@ -608,6 +608,78 @@ class Test():
                     bucket, key, partition, rando_values, True)
                 assert deltas == [rando_values[-1]]
 
+    def test_get_partition_difference_string_when_none(self):
+        bucket = 'safebucket'
+        key = 'dataset'
+        partition = 'hamburger'
+        rando_values = [self.rand_string() for x in range(10)]
+        rando_values.sort()
+        s3_paths = []
+
+        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+            _get_all_files_list.return_value = []
+
+            # values when theres no bucket data
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, rando_values[:-2])
+            deltas.sort()
+            assert deltas == []
+            # values when theres no bucket data and reversed
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, rando_values[:-2], True)
+            deltas.sort()
+            assert deltas == rando_values[:-2]
+
+    def test_get_partition_difference_int_when_none(self):
+        bucket = 'safebucket'
+        key = 'dataset'
+        partition = 'hamburger'
+        rando_values = [1,2,3,4,5]
+        rando_values.sort()
+        s3_paths = []
+
+        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+                _get_all_files_list.return_value = []
+                _get_partitions_and_types.return_value = 777.09
+
+                # values when there is no bucket data
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, rando_values[:-2])
+                deltas.sort()
+                assert deltas == []
+                # values when theres no bucket data and reversed
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, rando_values[:-2], True)
+                deltas.sort()
+                assert deltas == rando_values[:-2]
+            
+    def test_get_partition_difference_int_comparison_none(self):
+        bucket = 'safebucket'
+        key = 'dataset'
+        partition = 'hamburger'
+        rando_values = [1,2,3,4,5]
+        rando_values.sort()
+        s3_paths = [
+            f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
+
+        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+                _get_all_files_list.return_value = s3_paths
+                _get_partitions_and_types.return_value = {
+                    "hamburger": "integer"}
+
+                # values when there is no sent comparisons
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, [])
+                deltas.sort()
+                assert deltas == rando_values[:-1]
+                # values when there is no sent comparisons and reversed
+                deltas = fetch_parq.get_diff_partition_values(
+                    bucket, key, partition, [], True)
+                deltas.sort()
+                assert deltas == []
+
     def test_get_partition_difference_datetime(self):
         bucket = 'safebucket'
         key = 'dataset'
