@@ -180,7 +180,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
         for prefix in filtered_paths:
             if file.startswith(prefix):
                 files_to_load.append(file)
-                continue
+
     # if there is no data matching the filters, return an empty DataFrame
     # with correct headers and type
     if len(files_to_load) < 1:
@@ -222,7 +222,10 @@ def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, compar
         "values": diff_values
     }]
 
-    return fetch(bucket=input_bucket, key=input_key, filters=filters, parallel=parallel)
+    if reverse:
+        return fetch(bucket=comparison_bucket, key=comparison_key, filters=filters, parallel=parallel)
+    else:
+        return fetch(bucket=input_bucket, key=input_key, filters=filters, parallel=parallel)
 
 
 def convert_type(val: Any, dtype: str) -> Any:
