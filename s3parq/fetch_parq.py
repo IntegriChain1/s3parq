@@ -59,24 +59,6 @@ NON_NUM_TYPES = [
     "boolean"
 ]
 
-''' TODO: development notes, remove after
-Internal attributes:
-    List of keys for the filtered dataset
-    List of local files pulled from above
-    List of dataframes
-
-Phase 1:
-    Take and validate input
-    Get partitions
-Phase 2:
-    Compare partitions to filters
-    Create file paths to filtered parquets
-Phase 3:
-    Pull down files
-    Transform files to dataframes
-    Concat dataframes and return
-'''
-
 
 def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
     """retruns all values, correctly typed, for a given partition IN NO ORDER."""
@@ -102,7 +84,8 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
 
     if not all_files:
         if reverse:
-            diff = set([str(val) for val in values_to_diff])
+            # Keeping  ->set->list fuctionality to have consistent lack of duplicates
+            diff = list(set(values_to_diff))
             return diff
         else:
             return []
@@ -119,7 +102,7 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
         if reverse:
             return []
         else:
-            return partition_set
+            return [convert_type(val, partition_dtype) for val in partition_set]
 
     if reverse:
         diff = values_to_diff_set - partition_set
