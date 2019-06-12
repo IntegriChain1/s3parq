@@ -102,7 +102,8 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
 
     if not all_files:
         if reverse:
-            diff = set([str(val) for val in values_to_diff])
+            # Keeping  ->set->list fuctionality to have consistent lack of duplicates
+            diff = list(set(values_to_diff))
             return diff
         else:
             return []
@@ -119,7 +120,7 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
         if reverse:
             return []
         else:
-            return partition_set
+            return [convert_type(val, partition_dtype) for val in partition_set]
 
     if reverse:
         diff = values_to_diff_set - partition_set
