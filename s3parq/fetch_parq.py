@@ -59,24 +59,6 @@ NON_NUM_TYPES = [
     "boolean"
 ]
 
-''' TODO: development notes, remove after
-Internal attributes:
-    List of keys for the filtered dataset
-    List of local files pulled from above
-    List of dataframes
-
-Phase 1:
-    Take and validate input
-    Get partitions
-Phase 2:
-    Compare partitions to filters
-    Create file paths to filtered parquets
-Phase 3:
-    Pull down files
-    Transform files to dataframes
-    Concat dataframes and return
-'''
-
 
 def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
     """retruns all values, correctly typed, for a given partition IN NO ORDER."""
