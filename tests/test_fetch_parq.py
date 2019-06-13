@@ -819,10 +819,10 @@ class Test():
             parallel=False
         )
 
-        fetched_diff.sort_index(inplace=True)
-        input_df.sort_index(inplace=True)
-        assert fetched_diff.empty
-        #assert fetched_diff['price'].equals(input_df['price'])
+        fetched_diff.sort_values(by=['price'], inplace=True)
+        input_df.sort_values(by=['price'], inplace=True)
+
+        assert np.array_equal(fetched_diff.values, input_df.values)
 
         fetched_diff_reverse = fetch_parq.fetch_diff(
             input_bucket=input_bucket,
@@ -846,4 +846,7 @@ class Test():
             parallel=False
         )
 
-        assert fetched_diff_reverse_both.empty
+        fetched_diff.sort_values(by=['price'], inplace=True)
+        input_df.sort_values(by=['price'], inplace=True)
+
+        assert np.array_equal(fetched_diff_reverse_both.values, input_df.values)

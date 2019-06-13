@@ -332,21 +332,31 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
     are set ie all non-matching partitions are excluded.
     '''
     filter_keys = []
+    matched_parts = OrderedDict()
+    matched_part_vals = set()
 
     for part, part_values in typed_parts.items():
+        matched_part_vals.clear()
+
         for f in filters:
             if (f['partition'] == part):
                 comparison = OPS[f['comparison']]
                 for v in f['values']:
-                    typed_parts[part] = set(filter(
-                        lambda x: comparison(x, v),
-                        typed_parts[part]
-                    )
-                    )
+                    for x in part_values:
+                        if comparison(x, v):
+                            matched_part_vals.add(x)                 
+                matched_parts[part] = matched_part_vals.copy()
 
-    def construct_paths(typed_parts, previous_fil_keys: List[str]) -> None:
-        if len(typed_parts) > 0:
-            part = typed_parts.popitem(last=False)
+    unfiltered = set(typed_parts.keys()) - set(matched_parts.keys())
+    for part in unfiltered:
+        matched_part_vals.clear()
+        for val in typed_parts[part]:
+            matched_part_vals.add(val)
+        matched_parts[part] = matched_part_vals.copy()
+            
+    def construct_paths(matched_parts, previous_fil_keys: List[str]) -> None:
+        if len(matched_parts) > 0:
+            part = matched_parts.popitem(last=False)
             new_filter_keys = list()
             for value in part[1]:
                 mapped_keys = list(map(
@@ -356,13 +366,15 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
                 ))
                 new_filter_keys = new_filter_keys + mapped_keys
 
-            construct_paths(typed_parts, new_filter_keys)
+            construct_paths(matched_parts, new_filter_keys)
         else:
             filter_keys.append(previous_fil_keys)
 
-    construct_paths(typed_parts, [f"{key}/"])
-
+    construct_paths(matched_parts, [f"{key}/"])
     # TODO: fix the below mess with random array
+    for item in filter_keys[0]:
+        print(str(item))
+    raise ValueError("test")
     return filter_keys[0]
 
 

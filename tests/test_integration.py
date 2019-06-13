@@ -5,7 +5,7 @@ import pytest
 import dfmock
 from s3parq.testing_helper import df_equal_by_set
 from s3parq.publish_parq import publish
-from s3parq.fetch_parq import fetch
+from s3parq.fetch_parq import fetch, get_all_partition_values
 import pandas as pd
 
 
@@ -34,20 +34,19 @@ def test_end_to_end():
         bucket=bucket_name,
         key=key,
         dataframe=df.dataframe,
-        partitions=['string_options',
-                    'datetime_options', 'float_options']
+        partitions=['string_options', 'datetime_options', 'float_options']
     )
 
     # go get it
-    dataframe = fetch(
+    fetched_df = fetch(
         bucket=bucket_name,
         key=key,
         parallel=False
     )
 
-    assert dataframe.shape == df.dataframe.shape
-    pd.DataFrame.eq(dataframe, df.dataframe)
-    dataframe.head()
+    assert fetched_df.shape == df.dataframe.shape
+    pd.DataFrame.eq(fetched_df, df.dataframe)
+    fetched_df.head()
 
 @moto.mock_s3
 def test_via_public_interface():
