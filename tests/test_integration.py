@@ -5,7 +5,7 @@ import pytest
 import dfmock
 from s3parq.testing_helper import df_equal_by_set
 from s3parq.publish_parq import publish
-from s3parq.fetch_parq import fetch, get_all_partition_values
+from s3parq.fetch_parq import fetch
 import pandas as pd
 
 
