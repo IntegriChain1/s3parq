@@ -333,26 +333,21 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
     '''
     filter_keys = []
     matched_parts = OrderedDict()
+    matched_parts.keys = typed_parts.keys()
     matched_part_vals = set()
 
     for part, part_values in typed_parts.items():
         matched_part_vals.clear()
-
-        for f in filters:
-            if (f['partition'] == part):
-                comparison = OPS[f['comparison']]
-                for v in f['values']:
-                    for x in part_values:
-                        if comparison(x, v):
-                            matched_part_vals.add(x)                 
-                matched_parts[part] = matched_part_vals.copy()
-
-    unfiltered = set(typed_parts.keys()) - set(matched_parts.keys())
-    for part in unfiltered:
-        matched_part_vals.clear()
-        for val in typed_parts[part]:
-            matched_part_vals.add(val)
-        matched_parts[part] = matched_part_vals.copy()
+        fil = next((f for f in filters if f['partition'] == part), False)
+        if fil:
+            comparison = OPS[fil['comparison']]
+            for v in fil['values']:
+                for x in part_values:
+                    if comparison(x, v):
+                        matched_part_vals.add(x)
+            matched_parts[part] = matched_part_vals.copy()
+        else:
+            matched_parts[part] = part_values
             
     def construct_paths(matched_parts, previous_fil_keys: List[str]) -> None:
         if len(matched_parts) > 0:
@@ -372,9 +367,6 @@ def _get_filtered_key_list(typed_parts: dict, filters, key) -> List[str]:
 
     construct_paths(matched_parts, [f"{key}/"])
     # TODO: fix the below mess with random array
-    for item in filter_keys[0]:
-        print(str(item))
-    raise ValueError("test")
     return filter_keys[0]
 
 
