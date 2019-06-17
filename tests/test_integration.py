@@ -55,14 +55,13 @@ def test_via_public_interface():
     key = 'testing/is/fun/dataset-name'
     s3_client.create_bucket(Bucket=bucket_name)
 
-    parq = s3parq.S3Parq()
-    parq.publish(bucket=bucket_name,
+    publish(bucket=bucket_name,
                 key=key,
                 dataframe=df.dataframe,
                 partitions=['datetime_options'])
 
     ## moto explodes when we use parallel :( need to test this with a real boto call
-    result = parq.fetch(bucket=bucket_name,
+    result = fetch(bucket=bucket_name,
                         key=key,
                         parallel=False
                         )
