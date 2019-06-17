@@ -15,7 +15,7 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
     exit
 fi
 
-if [[ "$(docker images -q s3parq:latest 2> /dev/null)" == "" ]] || [[ "$1" == "--build" ]] [[ "$1" == "-b"]]; then
+if [ "$(docker images -q s3parq:latest 2> /dev/null)" == "" ] || [ "$1" == "--build" ] || [ "$1" == "-b" ]; then
     docker build . -t s3parq
 fi
 
