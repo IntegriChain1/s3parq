@@ -1,0 +1,22 @@
+#! /bin/bash
+
+
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    echo '
++-----------------------------------------------------+
+|Spin up a docker container for development!          |
+|dev_env [OPTIONS]                                    |
+|                                                     |
+|options:                                             |
+|--help -h\tdisplay this message                      |
+|--build -b\tforce rebuild the image                  |
++-----------------------------------------------------+
+'
+    exit
+fi
+
+if [[ "$(docker images -q s3parq:latest 2> /dev/null)" == "" ]] || [[ "$1" == "--build" ]] [[ "$1" == "-b"]]; then
+    docker build . -t s3parq
+fi
+
+docker run -it -v $(pwd):/app s3parq /bin/bash
