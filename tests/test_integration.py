@@ -55,7 +55,6 @@ def test_via_public_interface():
     key = 'testing/is/fun/dataset-name'
     s3_client.create_bucket(Bucket=bucket_name)
 
-    parq = s3parq.S3Parq()
     parq.publish(bucket=bucket_name,
                 key=key,
                 dataframe=df.dataframe,
