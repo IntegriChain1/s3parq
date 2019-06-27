@@ -14,7 +14,8 @@ Base = declarative_base()
 from sqlalchemy import engine, create_engine
 
 import os
-region_name = os.environ['AWS_REGION']
+# region_name = os.environ['AWS_REGION']
+region_name = 'us-east-1'
 
 import boto3
 session = boto3.Session(region_name=region_name)
@@ -36,14 +37,18 @@ def get_redshift_credentials(region, access_key, secret_key, redshift_user, clus
     response = client.get_cluster_credentials(
         DbUser=redshift_user,
         ClusterIdentifier=cluster_id,
+        AutoCreate=True
     )
     return response
 
-creds = get_redshift_credentials(region_name, access_key, secret_key, 'awsuser, 'core-sandbox-cluster-1')
+creds = get_redshift_credentials(region_name, access_key, secret_key, 'tobiasj-dev', 'core-sandbox-cluster-1')
 host = 'core-sandbox-cluster-1.c3swieqn0nz0.us-east-1.redshift.amazonaws.com'
-port='5432'
-db='spectrum'
+port='5439'
+db='ichain_dev'
 user = creds['DbUser']
+import urllib
+user = urllib.parse.quote_plus(user)
 pwd = creds['DbPassword']
 engine = create_engine(f'postgresql://{user}:{pwd}@{host}:{port}/{db}')
+
 cxn = engine.connect() # This breaks
