@@ -8,15 +8,12 @@ cur_directory = path.abspath(path.dirname(__file__))
 with open(path.join(cur_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-
-# get requirements from requirmeents.txt
 def get_reqs():
     reqs=[]
     with open("requirements.txt") as file:
         for line in file:
             # remove linebreak which is the last character of the string
             currentReq = line[:-1]
-            # add item to the list
             reqs.append(currentReq)
     return reqs
 
