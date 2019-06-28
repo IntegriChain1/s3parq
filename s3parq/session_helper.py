@@ -7,45 +7,62 @@ from contextlib import contextmanager
 import logging
 
 
-class SessionHelper:
+success = True
+fail = False
 
-    def __init__(self, region, cluster_id, host, port, db_name, iam_user):
+
+class SessionHelper:  
+    '''
+    Helper class for establishing a connection with a Redshift database.  It assumes your IAM
+    role has been configured to access the cluster _and_ has privileges on the database.
+
+    Example usage:
+    SH = SessionHelper('us-east-1', 'some-cluster-1', 'some-host','5439','some-database')
+    SH.configure_session_helper()
+    '''
+
+    def __init__(self, region: str, cluster_id: str, host: str, port: str, db_name: str):
         self.region = region
         self.cluster_id = cluster_id
         self.host = host
         self.port = port
         self.db_name = db_name
-        self.iam_user = iam_user
-        self.boto_session = None
-        self.rs_client = None  # Redshift Client
-        self.aws_credentials = None
-        self.Session = None
-        self.engine = None
 
-    def get_boto_session(self):
+    def set_boto_session(self):
         try:
             self.boto_session = boto3.Session(region_name=self.region)
-            return True
+            return success
         except Exception as e:  # TODO: which specific errors can occur?
             logging.warn('Failed to create a boto3 session')
             logging.warn(e)
-            return False
+            return fail
 
-    def make_db_session(self, **kwargs):
-        if not self.engine:
-            user, pwd = kwargs['user'], kwargs['pwd']
-            self.engine = create_engine(f'postgresql://{user}:{pwd}@{self.host}:{self.port}/{self.db_name}')
-        self.Session = sessionmaker(bind=self.engine)
+    def set_iam_user(self):
+        try:
+            iam_client = self.boto_session.client('iam')
+            iam_user = iam_client.get_user()
+            self.iam_user = iam_user['User']['UserName']
+            return success
+        except Exception as e:  # TODO: which specific errors can occur?
+            logging.warn('Failed to set IAM user')
+            logging.warn(e)
+            return fail
 
     def set_aws_credentials(self, session):
         try:
             credentials = session.get_credentials()
             self.aws_credentials = credentials.get_frozen_credentials()
-            return True
+            return success
         except Exception as e:  # TODO: which specific errors can occur?
             logging.warn('Failed to generate a redshift client')
             logging.warn(e)
-            return False
+            return fail
+
+    def make_db_session(self, **kwargs):
+        user, pwd = kwargs['user'], kwargs['pwd']
+        self.engine = create_engine(
+            f'postgresql://{user}:{pwd}@{self.host}:{self.port}/{self.db_name}')
+        self.Session = sessionmaker(bind=self.engine)
 
     def get_redshift_credentials(self):
         client = self.boto_session.client(
@@ -66,6 +83,14 @@ class SessionHelper:
         username = urllib.parse.quote_plus(username)
         pwd = rs_creds['DbPassword']
         return username, pwd
+
+    def configure_session_helper(self):
+        self.set_boto_session()
+        self.set_iam_user()
+        self.set_aws_credentials(self.boto_session)
+        temp_creds = self.get_redshift_credentials()
+        user, pwd = self.parse_temp_redshift_credentials(temp_creds)
+        self.make_db_session(user=user, pwd=pwd)
 
     @contextmanager
     def db_session_scope(self):
