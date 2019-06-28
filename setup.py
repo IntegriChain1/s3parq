@@ -8,6 +8,18 @@ cur_directory = path.abspath(path.dirname(__file__))
 with open(path.join(cur_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
+
+# get requirements from requirmeents.txt
+def get_reqs():
+    reqs=[]
+    with open("requirements.txt") as file:
+        for line in file:
+            # remove linebreak which is the last character of the string
+            currentReq = line[:-1]
+            # add item to the list
+            reqs.append(currentReq)
+    return reqs
+
 setup(
     name=package_name,
     version=package_version,
@@ -25,6 +37,5 @@ setup(
         ],
     packages= find_packages(exclude=("tests",)),
     include_package_data=True,
-    tests_require = ["dfmock==0.0.14","moto"],
-    install_requires=["pandas","pyarrow","boto3","s3fs"]
+    install_requires=get_reqs()
     )
