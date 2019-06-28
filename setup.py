@@ -26,5 +26,5 @@ setup(
     packages= find_packages(exclude=("tests",)),
     include_package_data=True,
     tests_require = ["dfmock==0.0.14","moto"],
-    install_requires=["pandas","pyarrow","boto3","s3fs"]
+    install_requires=["pandas","pyarrow","boto3","s3fs","sqlalchemy","psycopg2"]
     )
