@@ -2,7 +2,5 @@
 
 # Open Redshift
 
-# Create Schema in Redshift
-
-
+# Create Schema in Redshift if schema name doesn't already exist
 
