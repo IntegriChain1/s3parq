@@ -7,11 +7,7 @@ from contextlib import contextmanager
 import logging
 
 
-success = True
-fail = False
-
-
-class SessionHelper:  
+class SessionHelper:
     '''
     Helper class for establishing a connection with a Redshift database.  It assumes your IAM
     role has been configured to access the cluster _and_ has privileges on the database.
@@ -29,34 +25,16 @@ class SessionHelper:
         self.db_name = db_name
 
     def set_boto_session(self):
-        try:
-            self.boto_session = boto3.Session(region_name=self.region)
-            return success
-        except Exception as e:  # TODO: which specific errors can occur?
-            logging.warn('Failed to create a boto3 session')
-            logging.warn(e)
-            return fail
+        self.boto_session = boto3.Session(region_name=self.region)
 
     def set_iam_user(self):
-        try:
-            iam_client = self.boto_session.client('iam')
-            iam_user = iam_client.get_user()
-            self.iam_user = iam_user['User']['UserName']
-            return success
-        except Exception as e:  # TODO: which specific errors can occur?
-            logging.warn('Failed to set IAM user')
-            logging.warn(e)
-            return fail
+        iam_client = self.boto_session.client('iam')
+        iam_user = iam_client.get_user()
+        self.iam_user = iam_user['User']['UserName']
 
     def set_aws_credentials(self, session):
-        try:
-            credentials = session.get_credentials()
-            self.aws_credentials = credentials.get_frozen_credentials()
-            return success
-        except Exception as e:  # TODO: which specific errors can occur?
-            logging.warn('Failed to generate a redshift client')
-            logging.warn(e)
-            return fail
+        credentials = session.get_credentials()
+        self.aws_credentials = credentials.get_frozen_credentials()
 
     def make_db_session(self, **kwargs):
         user, pwd = kwargs['user'], kwargs['pwd']
@@ -85,12 +63,17 @@ class SessionHelper:
         return username, pwd
 
     def configure_session_helper(self):
-        self.set_boto_session()
-        self.set_iam_user()
-        self.set_aws_credentials(self.boto_session)
-        temp_creds = self.get_redshift_credentials()
-        user, pwd = self.parse_temp_redshift_credentials(temp_creds)
-        self.make_db_session(user=user, pwd=pwd)
+        try:
+            self.set_boto_session()
+            self.set_iam_user()
+            self.set_aws_credentials(self.boto_session)
+            temp_creds = self.get_redshift_credentials()
+            user, pwd = self.parse_temp_redshift_credentials(temp_creds)
+            self.make_db_session(user=user, pwd=pwd)
+        except Exception as e:
+            logging.error('Failed to set up the SessionHelper')
+            logging.error(e)
+            raise
 
     @contextmanager
     def db_session_scope(self):
