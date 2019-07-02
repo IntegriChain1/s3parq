@@ -3,22 +3,22 @@ from s3parq.redshift_naming_helper import RedshiftNamingHelper
 
 
 def test_naming_validator():
-    helper = RedshiftNamingHelper
+    helper = RedshiftNamingHelper()
     # Makes sure the schema name meets best practices
 
-    response = helper.name_validator('my string')
-    assert not response, f'allowed name with space'
+    response = helper.validate_chars('my string')
+    assert not response[0], response[1]
 
-    response = helper.name_validator('my_string')
-    assert response, f'disallowed valid schema name'
+    response = helper.validate_chars('my_string')
+    assert response[0], response[1]
 
-    response = helper.name_validator('WHERE')
-    assert not response, f'allowed SQL keyword as name'
+    response = helper.validate_chars('WHERE')
+    assert not response[0], response[1]
 
-    response = helper.name_validator('@my_string')
-    assert not response, f'allowed invalid character'
+    response = helper.validate_chars('@my_string')
+    assert not response[0], response[1]
 
-    response = helper.name_validator(
+    response = helper.validate_chars(
         "asdffdsaasdffdsaasdfasdffdsaasdffdsaasd\
         fasdffdsaasdffdsaasdfasdffdsaasdffdsaasdsd\
         ffdsaasdffdsaasdfasdffdsaasdffdsaasdfasdffdsaasdffdsaasdf"
