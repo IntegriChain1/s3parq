@@ -1,5 +1,9 @@
-# Makes sure the schema name meets best practices
+import pytest
+import boto3
+import s3parq.schema_creator as SC
 
-# Start a session and connect to Redshift
 
-# Create Schema in Redshift if schema name doesn't already exist
+# Given a correctly formatted string make sure output is correct SQL
+def test_sql_output():
+    verified_string = "my_string"
+    assert SC.schema_generator(verified_string) == f"create schema if not exists {verified_string};"
