@@ -165,7 +165,7 @@ ideal size: {ideal_size} bytes
 
 
 def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) -> None:
-    logger.info("Checking params...")
+    logger.info("Checking params....")
     check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
     check_partitions(partitions, dataframe)
