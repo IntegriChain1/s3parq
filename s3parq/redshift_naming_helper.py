@@ -8,7 +8,7 @@ class RedshiftNamingHelper:
         reserved = [x.strip(',') for x in reserved]
         return (name.upper() in reserved)
 
-    def validate_chars(self, name: str):
+    def validate_name(self, name: str):
         if self.check_reserved_keyword(name):
             return tuple([False, f'name: {name} cannot be a reserved SQL keyword'])
         elif not bool(re.match(r"^[a-zA-Z0-9_]", name)):
