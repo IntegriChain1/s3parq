@@ -105,9 +105,11 @@ def _format_partition_strings_for_sql(partitions: [str]) -> [str]:
     return formatted_partitions
 
 
-def index_containing_substring(the_list: [str], substring: str) -> int:
+def last_index_containing_substring(the_list: [str], substring: str) -> int:
     '''
-    Returns index of first string that contains a substring within a list. 
+    Returns index of last string that contains a substring within a list.  If there's no match, it returns
+    the length of the list + 1 because we want the function that uses it "_get_partition_location"
+    to not identify any partitions if none exists
     Args:
         the_list ([str]): list of strings, probably representing the partitions
         substring (str): string to look for in the_list
@@ -118,17 +120,17 @@ def index_containing_substring(the_list: [str], substring: str) -> int:
     --------
     Example:
         Args: 
-            the_list = ['path', 'to', 'data', 'hamburger=abcd', 'hot_dog=1234']
+            the_list = ['path', 'to', 'data', 'hamburger=abcd', 'hot_dog=1234', 'the_file.parquet]
             substring = '='
         ----
         Returns:
             i = 3
         
     '''
-    for i, s in enumerate(the_list):
+    for s in reversed(the_list):
         if substring in s:
-            return i
-    return -1
+            return len(the_list) - the_list.index(s)
+    return len(the_list) + 1
 
 
 def _get_partition_location(filepath: str):
@@ -138,16 +140,16 @@ def _get_partition_location(filepath: str):
     Args:
         filepath (str): path to a file in S3 that is partitioned
     Returns:
-        final_path (str): path within S3 bucket that has the first partition of a filepath
+        final_path (str): path within S3 bucket that has the last partition of a filepath
     Example:
         Args: 
             filepath = 'path/to/data/hamburger=abcd/hot_dog=1234/abcd1234.parquet'
         Returns:
-            final_path = 'path/to/data/hamburger=abcd'
+            final_path = 'path/to/data/hamburger=abcd/hot_dog=1234'
     '''
     separate_dirs = filepath.split('/')
-    first_partition = index_containing_substring(separate_dirs, "=")
-    final_set = separate_dirs[:first_partition + 1]
+    last_partition = last_index_containing_substring(separate_dirs, "=")
+    final_set = separate_dirs[:-last_partition + 1] #  I think this is more confusing than it has to be
     final_path = '/'.join(final_set)
     if final_path == '':
         raise ValueError(f'No partitions in this filepath {filepath}')
@@ -211,8 +213,8 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 if write_to_redshift:
                     sql_command = _generate_partition_sql(bucket, 'spectrum', 'test12', obj['Key'])
                     print(sql_command)
-                    with SH.db_session_scope() as scope:
-                        scope.execute(sql_command)
+                    # with SH.db_session_scope() as scope:
+                    #     scope.execute(sql_command)
     
 
     for obj in all_files_without_meta:
