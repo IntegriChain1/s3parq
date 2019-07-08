@@ -7,10 +7,11 @@ import sys
 import logging
 from typing import List
 
-from session_helper import SessionHelper
+from .session_helper import SessionHelper
 from sqlalchemy import Column, Integer, String
+## Commenting to wait and see how rest of team implements using SH
 # SH = SessionHelper({some_data})
-SH.configure_session_helper()
+# SH.configure_session_helper()
 
 
 logger = logging.getLogger(__name__)
@@ -58,30 +59,44 @@ def s3_url(bucket: str, key: str):
     return '/'.join(["s3:/", bucket, key])
 
 
-def _get_partitions_for_spectrum(file_head: dict) -> [str]:
+def _get_partitions_for_spectrum(filename: str) -> [str]:
     '''
+    Turns S3 filepath with partitions into list of only those partitions as strings
     Args:
-        key (str): directory inside S3 bucket where data is stored
-        filename (str): entire filepath for a single file within the key's directory
+        filename (str): entire filepath for a single file
     ----
     Returns:
         final_partitions (list of strings): these are the partitions for that file
     --------
     Example:
         Args:
-            key = 'some-path/to/data/'
             filename = 'some-path/to/data/zipcode=12345/birth_month=january/final_data_set.parquet
         ----
         Returns:
             final_partitions = ['zipcode=12345', 'birth_month=january']
     '''
-    filename = file_head['Key']
     filepath = filename.split('/')
     final_partitions = [_dir for _dir in filepath if '=' in _dir]
     return final_partitions
 
 
 def _format_partition_strings_for_sql(partitions: [str]) -> [str]:
+    '''
+    Formats a list of S3 partition strings for SQL statements
+    Args:
+        partitions ([str]): list of strings representing the partitions in S3
+    ----
+    Returns:
+        formatted_partitions ([str]): list of the same partitions with quotes
+        to use for SQL
+    --------
+    Example:
+        Args:
+            partitions = ['hamburger=abcd', 'hot_dog=1234']
+        ----
+        Returns:
+            formatted_partitions = ["hamburger='abcd'", "hot_dog='1234'"]
+    '''
     formatted_partitions = []
     for p in partitions:
         key, value = p.split('=')
@@ -90,7 +105,26 @@ def _format_partition_strings_for_sql(partitions: [str]) -> [str]:
     return formatted_partitions
 
 
-def index_containing_substring(the_list, substring):
+def index_containing_substring(the_list: [str], substring: str) -> int:
+    '''
+    Returns index of first string that contains a substring within a list. 
+    Args:
+        the_list ([str]): list of strings, probably representing the partitions
+        substring (str): string to look for in the_list
+    ----
+    Returns:
+        i (int): The index in the list that contains the first instance of the substring
+        returns -1 if no matches
+    --------
+    Example:
+        Args: 
+            the_list = ['path', 'to', 'data', 'hamburger=abcd', 'hot_dog=1234']
+            substring = '='
+        ----
+        Returns:
+            i = 3
+        
+    '''
     for i, s in enumerate(the_list):
         if substring in s:
             return i
@@ -98,13 +132,50 @@ def index_containing_substring(the_list, substring):
 
 
 def _get_partition_location(filepath: str):
+    '''
+    Gets location of data in S3 for partitioning in S3.  You need to know the path to 
+    the first partition in order to make a proper Spectrum partition w/ SQL-Redshift
+    Args:
+        filepath (str): path to a file in S3 that is partitioned
+    Returns:
+        final_path (str): path within S3 bucket that has the first partition of a filepath
+    Example:
+        Args: 
+            filepath = 'path/to/data/hamburger=abcd/hot_dog=1234/abcd1234.parquet'
+        Returns:
+            final_path = 'path/to/data/hamburger=abcd'
+    '''
     separate_dirs = filepath.split('/')
     first_partition = index_containing_substring(separate_dirs, "=")
     final_set = separate_dirs[:first_partition + 1]
-    return '/'.join(final_set)
+    final_path = '/'.join(final_set)
+    if final_path == '':
+        raise ValueError(f'No partitions in this filepath {filepath}')
+    return final_path
 
 
-def _generate_partition_sql(bucket: str, schema: str, table: str, partitions: [str], filepath: str) -> str:
+def _generate_partition_sql(bucket: str, schema: str, table: str, filepath: str) -> str:
+    '''
+    Generates partitioning SQL
+    Args:
+        bucket (str): S3 bucket where data is stored
+        schema (str): name of redshift schema (must already exist)
+        table (str): name of table in schema.  Must have partitions scoped out in `CREATE TABLE ...`
+        filepath (str): path to data in S3 that will be queryable by it's partitions
+    ----
+    Returns:
+        query (str): a raw SQL string that adds the partitioned data to the table
+    --------
+    Example:
+        Args:
+            bucket = 'MyBucket'
+            schema = 'MySchema'
+            table = 'MyTable'
+            filepath = 'path/to/data/apple=abcd/banana=1234/abcd1234.parquet'
+        Returns:
+            "ALTER TABLE MySchema.MyTable               ADD PARTITION (apple='abcd' ,banana='1234')               LOCATION 's3://MyBucket/path/to/data/apple=abcd';"
+    '''
+    partitions = _get_partitions_for_spectrum(filepath)
     formatted_partitions = _format_partition_strings_for_sql(partitions)
     path_to_data = _get_partition_location(filepath)
     query = f"ALTER TABLE {schema}.{table} \
@@ -138,8 +209,7 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 if not 'partition_data_types' in head_obj['Metadata']:
                     all_files_without_meta.append(obj['Key'])
                 if write_to_redshift:
-                    spectrum_partitions = _get_partitions_for_spectrum(obj)
-                    sql_command = _generate_partition_sql(bucket, 'spectrum', 'test12', spectrum_partitions, obj['Key'])
+                    sql_command = _generate_partition_sql(bucket, 'spectrum', 'test12', obj['Key'])
                     print(sql_command)
                     with SH.db_session_scope() as scope:
                         scope.execute(sql_command)
