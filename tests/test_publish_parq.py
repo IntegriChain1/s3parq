@@ -38,6 +38,19 @@ class Test:
 
         return tuple(df.columns.keys()), df.dataframe
 
+    def setup_redshift_params(self):
+        redshift_params = {
+            'schema_name': 'hamburger_schema',
+            'table_name': 'none',
+            'region': 'us-east-1',
+            'cluster': 'hamburger_cluster',
+            'host': 'hamburger_host',
+            'port': '9999',
+            'db_name': 'hamburger_db'
+        }
+
+        return redshift_params
+
     def test_works_without_partitions(self):
         columns, dataframe = self.setup_df()
         bucket, key = self.setup_s3()
@@ -117,10 +130,26 @@ class Test:
                     {"grouped_col": "string"})
 
     # Test Schema Creator on Publish
+    def test_no_redshift_publish(self):
+        columns, dataframe = self.setup_df()
+        bucket, key = self.setup_s3()
+        partitions = []
+        parq.publish(bucket=bucket, key=key,
+                        dataframe=dataframe, partitions=partitions)
+
+    @patch('s3parq.schema_creator.create_schema')
+    @patch('s3parq.publish_parq.SessionHelper', autospec=True)
+    def test_redshift_publish(self, mock_session_helper, mock_create_schema):
+        columns, dataframe = self.setup_df()
+        bucket, key = self.setup_s3()
+        partitions = []
+        redshift_params = self.setup_redshift_params()
+        mock_session_helper.return_value = 'Called'
+        parq.publish(bucket=bucket, key=key,
+                        dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
+        mock_create_schema.assert_called_once_with(redshift_params['schema_name'])
 
     '''
-
-
     ## timedeltas no good
     def test_timedeltas_rejected(self):
         bucket = MockHelper().random_name()
