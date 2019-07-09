@@ -200,13 +200,14 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
     if redshift_params:
         logger.debug("Opening Session helper.")
         session_helper = SessionHelper(
-            region = redshift_params.region,
-            cluster = redshift_params.cluster_id,
-            host = redshift_params.host,
-            port = redshift_params.port,
-            db_name = redshift_params.db_name
+            region = redshift_params['region'],
+            cluster_id = redshift_params['cluster'],
+            host = redshift_params['host'],
+            port = redshift_params['port'],
+            db_name = redshift_params['db_name']
         )
         session_helper.configure_session_helper()
-        create_schema(redshift_params.schema_name, session_helper)
-
+        create_schema(redshift_params['schema_name'], session_helper)
+        logger.debug('Schema created.')
+        
     return files
