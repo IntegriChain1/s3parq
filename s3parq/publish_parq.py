@@ -6,8 +6,8 @@ import s3fs
 import sys
 import logging
 from typing import List
-from .schema_creator import create_schema
-from .session_helper import SessionHelper
+from schema_creator import create_schema
+from session_helper import SessionHelper
 
 
 logger = logging.getLogger(__name__)
@@ -198,14 +198,15 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         files = files + published_files
     logger.debug("Done writing to S3.")
     if redshift_params:
+        logger.debug('Opening Session Helper')
         session_helper = SessionHelper(
-            region = redshift_params.region,
-            cluster = redshift_params.cluster_id,
-            host = redshift_params.host,
-            port = redshift_params.port,
-            db_name = redshift_params.db_name
+            region = redshift_params['region'],
+            cluster_id = redshift_params['cluster'],
+            host = redshift_params['host'],
+            port = redshift_params['port'],
+            db_name = redshift_params['db_name']
         )
         session_helper.configure_session_helper()
-        create_schema(redshift_params.schema_name, session_helper)
+        create_schema(redshift_params['schema_name'], session_helper)
 
     return files
