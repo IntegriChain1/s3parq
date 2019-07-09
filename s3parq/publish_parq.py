@@ -6,9 +6,8 @@ import s3fs
 import sys
 import logging
 from typing import List
-from schema_creator import create_schema
-from session_helper import SessionHelper
-
+from s3parq.schema_creator import create_schema 
+from s3parq.session_helper import SessionHelper
 
 logger = logging.getLogger(__name__)
 
@@ -209,5 +208,5 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         session_helper.configure_session_helper()
         create_schema(redshift_params['schema_name'], session_helper)
         logger.debug('Schema created.')
-        
+
     return files
