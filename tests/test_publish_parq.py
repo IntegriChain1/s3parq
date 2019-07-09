@@ -115,6 +115,9 @@ class Test:
                     Bucket=bucket, Key=obj['Key'])['Metadata']
                 assert meta['partition_data_types'] == str(
                     {"grouped_col": "string"})
+
+    # Test Schema Creator on Publish
+
     '''
 
 

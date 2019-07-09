@@ -6,6 +6,8 @@ import s3fs
 import sys
 import logging
 from typing import List
+from .schema_creator import create_schema
+from .session_helper import SessionHelper
 
 
 logger = logging.getLogger(__name__)
@@ -164,7 +166,17 @@ ideal size: {ideal_size} bytes
     return tuple(sized_frames)
 
 
-def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) -> None:
+def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, redshift_params = None) -> None:
+    '''Redshift Params:
+        ARGS: 
+            Schema_name: str
+            Table_name: str
+            region: str
+            cluster_id: str
+            host: str 
+            port: str 
+            db_name: str
+    '''
     logger.info("Checking params...")
     check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
@@ -185,4 +197,15 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) ->
                                                  partitions=partitions)
         files = files + published_files
     logger.debug("Done writing to S3.")
+    if redshift_params:
+        session_helper = SessionHelper(
+            region = redshift_params.region,
+            cluster = redshift_params.cluster_id,
+            host = redshift_params.host,
+            port = redshift_params.port,
+            db_name = redshift_params.db_name
+        )
+        session_helper.configure_session_helper()
+        create_schema(redshift_params.schema_name, session_helper)
+
     return files

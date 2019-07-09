@@ -15,8 +15,18 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
     exit
 fi
 
+AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+AWS_REGION=$(aws configure get region)
+
 if [ "$(docker images -q s3parq:latest 2> /dev/null)" == "" ] || [ "$1" == "--build" ] || [ "$1" == "-b" ]; then
     docker build . -t s3parq
 fi
 
-docker run -it -v $(pwd):/app s3parq /bin/bash
+docker run \
+-e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+-e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+-e AWS_REGION=$AWS_REGION \
+-p 5432 \
+-it -v \
+$(pwd):/app s3parq /bin/bash
