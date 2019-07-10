@@ -1,12 +1,7 @@
 import pytest
-import boto3
-from s3parq.session_helper import SessionHelper
-from sqlalchemy import Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from moto import mock_redshift, mock_iam
-from unittest import mock
 from mock import patch
 from s3parq.schema_creator import schema_name_validator, create_schema
+from s3parq.session_helper import SessionHelper
 
 class MockScopeObj():
 

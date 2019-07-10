@@ -1,15 +1,16 @@
 import pytest
 from mock import patch
+from string import ascii_lowercase
+from dfmock import DFMock
+from moto import mock_s3
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import boto3
-from string import ascii_lowercase
 import random
-from dfmock import DFMock
 import s3parq.publish_parq as parq
 import s3fs
-from moto import mock_s3
+
 
 
 @mock_s3
