@@ -138,16 +138,27 @@ class Test:
                         dataframe=dataframe, partitions=partitions)
 
     @patch('s3parq.schema_creator.create_schema')
-    @patch('s3parq.publish_parq.SessionHelper', autospec=True)
+    @patch('s3parq.publish_parq.SessionHelper')
     def test_redshift_publish(self, mock_session_helper, mock_create_schema):
         columns, dataframe = self.setup_df()
         bucket, key = self.setup_s3()
         partitions = []
         redshift_params = self.setup_redshift_params()
-        mock_session_helper.return_value = 'Called'
+        msh = mock_session_helper(
+            region = redshift_params['region'],
+            cluster_id = redshift_params['cluster'],
+            host = redshift_params['host'],
+            port = redshift_params['port'],
+            db_name = redshift_params['db_name']
+            )
+            
+        msh.configure_session_helper()
         parq.publish(bucket=bucket, key=key,
                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
-        mock_create_schema.assert_called_once_with(redshift_params['schema_name'])
+
+        mock_create_schema(redshift_params['schema_name'], msh)
+
+        mock_create_schema.assert_called_once_with(redshift_params['schema_name'], msh)
 
     '''
     ## timedeltas no good
