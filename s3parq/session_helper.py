@@ -1,4 +1,3 @@
-
 import boto3
 import urllib
 from sqlalchemy import create_engine
@@ -39,7 +38,7 @@ class SessionHelper:
     def make_db_session(self, **kwargs):
         user, pwd = kwargs['user'], kwargs['pwd']
         self.engine = create_engine(
-            f'postgresql://{user}:{pwd}@{self.host}:{self.port}/{self.db_name}')
+            f'postgresql://{user}:{pwd}@{self.host}:{self.port}/{self.db_name}', isolation_level="AUTOCOMMIT")
         self.Session = sessionmaker(bind=self.engine)
 
     def get_redshift_credentials(self):
@@ -81,7 +80,8 @@ class SessionHelper:
         try:
             yield session
             session.commit()
-        except:
+        except Exception as e:
+            logging.error(e)
             session.rollback()
         finally:
             session.close()
