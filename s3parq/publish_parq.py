@@ -166,7 +166,7 @@ ideal size: {ideal_size} bytes
 
 
 def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, redshift_params = None) -> None:
-    '''Redshift Params:
+    """Redshift Params:
         ARGS: 
             Schema_name: str
             Table_name: str
@@ -175,7 +175,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
             host: str 
             port: str 
             db_name: str
-    '''
+    """
     logger.info("Checking params...")
     check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
