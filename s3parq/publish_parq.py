@@ -195,6 +195,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
                                                  dataframe=dataframe,
                                                  partitions=partitions)
         files = files + published_files
+
     logger.debug("Done writing to S3.")
     if redshift_params:
         logger.debug("Opening Session helper.")
@@ -207,6 +208,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         )
         session_helper.configure_session_helper()
         create_schema(redshift_params['schema_name'], session_helper)
+       # create_table(redshift_params['table_name'], dataframe.columns, session_helper) How to get the column names from the dataframe...kinda
         logger.debug('Schema created.')
 
     return files
