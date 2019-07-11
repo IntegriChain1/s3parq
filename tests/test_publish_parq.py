@@ -1,15 +1,16 @@
 import pytest
 from mock import patch
+from string import ascii_lowercase
+from dfmock import DFMock
+from moto import mock_s3
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import boto3
-from string import ascii_lowercase
 import random
-from dfmock import DFMock
 import s3parq.publish_parq as parq
 import s3fs
-from moto import mock_s3
+
 
 
 @mock_s3
@@ -37,6 +38,19 @@ class Test:
         df.dataframe
 
         return tuple(df.columns.keys()), df.dataframe
+
+    def setup_redshift_params(self):
+        redshift_params = {
+            'schema_name': 'hamburger_schema',
+            'table_name': 'none',
+            'region': 'us-east-1',
+            'cluster': 'hamburger_cluster',
+            'host': 'hamburger_host',
+            'port': '9999',
+            'db_name': 'hamburger_db'
+        }
+
+        return redshift_params
 
     def test_works_without_partitions(self):
         columns, dataframe = self.setup_df()
@@ -115,9 +129,39 @@ class Test:
                     Bucket=bucket, Key=obj['Key'])['Metadata']
                 assert meta['partition_data_types'] == str(
                     {"grouped_col": "string"})
+
+    # Test Schema Creator on Publish
+    def test_no_redshift_publish(self):
+        columns, dataframe = self.setup_df()
+        bucket, key = self.setup_s3()
+        partitions = []
+        parq.publish(bucket=bucket, key=key,
+                        dataframe=dataframe, partitions=partitions)
+
+    @patch('s3parq.schema_creator.create_schema')
+    @patch('s3parq.publish_parq.SessionHelper')
+    def test_redshift_publish(self, mock_session_helper, mock_create_schema):
+        columns, dataframe = self.setup_df()
+        bucket, key = self.setup_s3()
+        partitions = []
+        redshift_params = self.setup_redshift_params()
+        msh = mock_session_helper(
+            region = redshift_params['region'],
+            cluster_id = redshift_params['cluster'],
+            host = redshift_params['host'],
+            port = redshift_params['port'],
+            db_name = redshift_params['db_name']
+            )
+            
+        msh.configure_session_helper()
+        parq.publish(bucket=bucket, key=key,
+                        dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
+
+        mock_create_schema(redshift_params['schema_name'], msh)
+
+        mock_create_schema.assert_called_once_with(redshift_params['schema_name'], msh)
+
     '''
-
-
     ## timedeltas no good
     def test_timedeltas_rejected(self):
         bucket = MockHelper().random_name()

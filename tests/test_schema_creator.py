@@ -1,7 +1,7 @@
 import pytest
-from s3parq.session_helper import SessionHelper
 from mock import patch
 from s3parq.schema_creator import schema_name_validator, create_schema
+from s3parq.session_helper import SessionHelper
 
 class MockScopeObj():
 
