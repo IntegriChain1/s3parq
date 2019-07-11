@@ -1,4 +1,6 @@
 from s3parq.create_table import create_table
+from s3parq.session_helper import SessionHelper
+
 
 class Test():
         
