@@ -42,12 +42,14 @@ class Test:
     def setup_redshift_params(self):
         redshift_params = {
             'schema_name': 'hamburger_schema',
-            'table_name': 'none',
+            'table_name': 'hamburger_table',
+            'database': 'hamburger_database',
+            'iam_role': 'hamburger_arn',
             'region': 'us-east-1',
             'cluster': 'hamburger_cluster',
             'host': 'hamburger_host',
             'port': '9999',
-            'db_name': 'hamburger_db'
+            'database': 'hamburger_db'
         }
 
         return redshift_params
@@ -150,16 +152,16 @@ class Test:
             cluster_id = redshift_params['cluster'],
             host = redshift_params['host'],
             port = redshift_params['port'],
-            db_name = redshift_params['db_name']
+            database = redshift_params['database']
             )
             
         msh.configure_session_helper()
         parq.publish(bucket=bucket, key=key,
                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
-        mock_create_schema(redshift_params['schema_name'], msh)
+        mock_create_schema(redshift_params['schema_name'], redshift_params['database'], redshift_params['iam_role'], msh)
 
-        mock_create_schema.assert_called_once_with(redshift_params['schema_name'], msh)
+        mock_create_schema.assert_called_once_with(redshift_params['schema_name'],redshift_params['database'], redshift_params['iam_role'], msh)
 
     '''
     ## timedeltas no good
