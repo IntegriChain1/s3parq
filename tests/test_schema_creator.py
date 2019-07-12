@@ -32,12 +32,12 @@ class Test():
         mock_session_helper.db_session_scope.return_value.__enter__ = scope_execute_mock
 
         schema_name = "my_string"
-        database = "my_database"
+        db_name = "my_database"
         iam_role = "my_iam_role"     
         with mock_session_helper.db_session_scope() as mock_scope:
-            create_schema(schema_name, database, iam_role, mock_session_helper)
+            create_schema(schema_name, db_name, iam_role, mock_session_helper)
             mock_scope.execute.assert_called_once_with(f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
                 FROM DATA CATALOG \
-                database '{database}' \
+                database '{db_name}' \
                 iam_role '{iam_role}' \
                 CREATE EXTERNAL DATABASE IF NOT EXISTS;")

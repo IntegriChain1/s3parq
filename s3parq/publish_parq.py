@@ -189,7 +189,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
             cluster_id: str
             host: str 
             port: str 
-            database: str
+            db_name: str
     """
     logger.info("Checking params...")
     check_empty_dataframe(dataframe)
@@ -219,10 +219,10 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
             cluster_id = redshift_params['cluster'],
             host = redshift_params['host'],
             port = redshift_params['port'],
-            database = redshift_params['database']
+            db_name = redshift_params['db_name']
         )
         session_helper.configure_session_helper()
-        create_schema(redshift_params['schema_name'], redshift_params['database'], redshift_params['iam_role'], session_helper)
+        create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
         logger.debug('Schema created.')
 
     return files
