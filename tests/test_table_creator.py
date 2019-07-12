@@ -30,8 +30,10 @@ class Test():
         mock_session_helper.db_session_scope.return_value.__enter__ = scope_execute_mock
 
         table_name = "my_string"
-        cols = ["testid integer not null", "testname varchar(100) not null", "testabrev char(2) not null"]  
+        cols = ["testid integer not null", "testname varchar(100) not null", "testabrev char(2) not null"] 
+        # print(cols)
+        # raise NotImplementedError 
         with mock_session_helper.db_session_scope() as mock_scope:
             create_table(table_name, cols, mock_session_helper)
-            mock_scope.execute.assert_called_once_with(f'CREATE TABLE IF NOT EXISTS {table_name} ( {cols.values});')
+            mock_scope.execute.assert_called_once_with(f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} ( {cols with datatypes});')
     
