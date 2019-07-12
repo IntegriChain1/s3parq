@@ -182,9 +182,9 @@ ideal size: {ideal_size} bytes
 def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, redshift_params = None) -> None:
     """Redshift Params:
         ARGS: 
-            Schema_name: str
-            Table_name: str
-            iam_role
+            schema_name: str
+            table_name: str
+            iam_role: str
             region: str
             cluster_id: str
             host: str 
