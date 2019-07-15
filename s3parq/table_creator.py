@@ -12,7 +12,7 @@ def table_name_validator(table_name: str):
         raise ValueError(name_validated[1])
 
 
-def create_table(table_name: str, schema_name: str, columns: list, session_helper: SessionHelper):
+def create_table(table_name: str, schema_name: str, columns: dict, session_helper: SessionHelper):
     table_name_validator(table_name)
     columns_string = ', '.join(columns)
     with session_helper.db_session_scope() as scope:
