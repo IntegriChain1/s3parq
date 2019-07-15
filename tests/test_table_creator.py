@@ -1,6 +1,6 @@
 import pytest
 from mock import patch
-from s3parq.table_creator import create_table, table_name_validator,datatype_to_sql
+from s3parq.table_creator import create_table, table_name_validator,datatype_to_sql, datatype_mapper
 from s3parq.session_helper import SessionHelper
 
 class MockScopeObj():
@@ -35,7 +35,17 @@ class Test():
         # raise NotImplementedError 
         with mock_session_helper.db_session_scope() as mock_scope:
             create_table(table_name, cols, mock_session_helper)
-            mock_scope.execute.assert_called_once_with(f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} ( {cols with datatypes});')
-    
-    def test_dtype_to_sql(self):
+            mock_scope.execute.assert_called_once_with(f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} ( {cols});')
+
+    #Test to check that the passed in datatype maps correctly
+    def test_datatype_mapper(self):
+        included_type = 'object'
+        excluded_type = 'yarn'
+        assert datatype_mapper(included_type) == 'VARCHAR'
+        with pytest.raises(KeyError):
+            datatype_mapper(excluded_type)
         
+
+    #Test to check that passed in a dictionary outputs, returns proper sql query
+    def test_dtype_to_sql(self):
+        pass

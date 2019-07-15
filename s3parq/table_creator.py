@@ -6,6 +6,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 #write a function for the switcher
+def datatype_mapper(dtype: str):
+    switcher = {
+        'object': 'VARCHAR',
+        'int64': 'int',
+        'float64': 'float',
+        'bool': 'BOOLEAN'
+    }
+    if switcher.get(dtype) is None:
+            raise KeyError()
+    return switcher.get(dtype)
 
 def datatype_to_sql(dtypes: dict):
     cols = dtypes.keys
