@@ -1,6 +1,6 @@
 import pytest
 from mock import patch
-from s3parq.table_creator import create_table, table_name_validator
+from s3parq.table_creator import create_table, table_name_validator,datatype_to_sql
 from s3parq.session_helper import SessionHelper
 
 class MockScopeObj():
@@ -37,3 +37,5 @@ class Test():
             create_table(table_name, cols, mock_session_helper)
             mock_scope.execute.assert_called_once_with(f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} ( {cols with datatypes});')
     
+    def test_dtype_to_sql(self):
+        

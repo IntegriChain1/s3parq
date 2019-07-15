@@ -3,6 +3,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import s3fs
+import re
 import sys
 import logging
 from typing import List
@@ -31,7 +32,11 @@ def check_dataframe_for_timedelta(dataframe: pd.DataFrame)->None:
 def _get_dataframe_datatypes(dataframe: pd.DataFrame) -> dict:
     """ returns key/value paired dictionary of a dataframe's column names and column datatypes """
     cols = dataframe.columns
-    types = dataframe.dtypes.to_list()
+    types = []
+    for col in dataframe:
+        type_string = dataframe[col].dtype
+        types.append(type_string.name)
+
     return dict(zip(cols, types))
 
 def _check_partition_compatibility(partition: str) -> bool:
