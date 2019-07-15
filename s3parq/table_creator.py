@@ -5,6 +5,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def _datatype_to_sql(dtypes: dict):
+        
 
 def table_name_validator(table_name: str):
     name_validated = RedshiftNamingHelper().validate_name(table_name)
