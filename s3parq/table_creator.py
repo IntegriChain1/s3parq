@@ -20,6 +20,10 @@ def datatype_mapper(dtype: str):
 def datatype_to_sql(dtypes: dict):
     cols = dtypes.keys
     types = dtypes.values
+    sql_statement = []
+    for key, value in dtypes.items():
+            sql_statement.append(f'{key} as {datatype_mapper(value)}')
+    return ', '.join(sql_statement)
 
 
 def table_name_validator(table_name: str):

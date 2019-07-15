@@ -48,4 +48,6 @@ class Test():
 
     #Test to check that passed in a dictionary outputs, returns proper sql query
     def test_dtype_to_sql(self):
-        pass
+        test_dict = {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64', 'bool_col': 'bool'}
+
+        assert datatype_to_sql(test_dict) == 'grouped_col as VARCHAR, text_col as VARCHAR, int_col as integer, float_col as float, bool_col as BOOLEAN'
