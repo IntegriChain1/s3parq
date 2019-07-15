@@ -162,6 +162,10 @@ class Test:
 
         mock_create_schema.assert_called_once_with(redshift_params['schema_name'],redshift_params['db_name'], redshift_params['iam_role'], msh)
 
+    def test_df_datatypes(self):
+        columns, dataframe = self.setup_df()
+        assert parq._get_dataframe_datatypes(dataframe) == {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
+
     '''
     ## timedeltas no good
     def test_timedeltas_rejected(self):
