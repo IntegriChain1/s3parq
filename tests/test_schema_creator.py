@@ -17,9 +17,11 @@ class Test():
     def test_validator(self):
         schema_name_good = "my_string"
         schema_name_bad = "my string"
-        schema_name_validator(schema_name_good)
+        database_name_good = 'my_database'
+        database_name_bad = 'my database'
+        schema_name_validator(schema_name_good, database_name_good)
         with pytest.raises(ValueError):
-            schema_name_validator(schema_name_bad)
+            schema_name_validator(schema_name_bad, database_name_bad)
 
     # Test that the function is called with the schema name
     @patch('s3parq.schema_creator.SessionHelper')
@@ -29,7 +31,13 @@ class Test():
         mock_execute.return_value = MockScopeObj()
         mock_session_helper.db_session_scope.return_value.__enter__ = scope_execute_mock
 
-        schema_name = "my_string"     
+        schema_name = "my_string"
+        db_name = "my_database"
+        iam_role = "my_iam_role"     
         with mock_session_helper.db_session_scope() as mock_scope:
-            create_schema(schema_name, mock_session_helper)
-            mock_scope.execute.assert_called_once_with(f'CREATE SCHEMA IF NOT EXISTS {schema_name}')
+            create_schema(schema_name, db_name, iam_role, mock_session_helper)
+            mock_scope.execute.assert_called_once_with(f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
+                FROM DATA CATALOG \
+                database '{db_name}' \
+                iam_role '{iam_role}' \
+                CREATE EXTERNAL DATABASE IF NOT EXISTS;")

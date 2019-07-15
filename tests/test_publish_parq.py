@@ -42,7 +42,8 @@ class Test:
     def setup_redshift_params(self):
         redshift_params = {
             'schema_name': 'hamburger_schema',
-            'table_name': 'none',
+            'table_name': 'hamburger_table',
+            'iam_role': 'hamburger_arn',
             'region': 'us-east-1',
             'cluster': 'hamburger_cluster',
             'host': 'hamburger_host',
@@ -157,9 +158,9 @@ class Test:
         parq.publish(bucket=bucket, key=key,
                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
-        mock_create_schema(redshift_params['schema_name'], msh)
+        mock_create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
 
-        mock_create_schema.assert_called_once_with(redshift_params['schema_name'], msh)
+        mock_create_schema.assert_called_once_with(redshift_params['schema_name'],redshift_params['db_name'], redshift_params['iam_role'], msh)
 
     '''
     ## timedeltas no good
