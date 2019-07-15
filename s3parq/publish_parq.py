@@ -50,6 +50,20 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
     logger.debug("Done checking partitions.")
 
 
+def check_redshift_params(redshift_params: list):
+    logger.debug("Checking redshift params are correctly formatted")
+    number_redshift_params = 8
+    if len(redshift_params) != number_redshift_params:
+        params_length_message = f"Expected parameters: {number_redshift_params}. Received: {len(redshift_params)}"
+        raise ValueError(params_length_message)
+    for item in redshift_params:
+        if type(item) != str:
+            params_type_message = f"Expected type: String. Received: {type(item)}"
+            raise ValueError(params_type_message)
+
+    logger.debug('Done checking redshift params')
+
+
 def s3_url(bucket: str, key: str):
     return '/'.join(["s3:/", bucket, key])
 
@@ -168,8 +182,9 @@ ideal size: {ideal_size} bytes
 def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, redshift_params = None) -> None:
     """Redshift Params:
         ARGS: 
-            Schema_name: str
-            Table_name: str
+            schema_name: str
+            table_name: str
+            iam_role: str
             region: str
             cluster_id: str
             host: str 
@@ -179,7 +194,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
     logger.info("Checking params...")
     check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
-    check_partitions(partitions, dataframe)
+    check_partitions(partitions, dataframe) 
     logger.info("Params valid.")
     logger.debug("Begin writing to S3..")
 
@@ -197,6 +212,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         files = files + published_files
     logger.debug("Done writing to S3.")
     if redshift_params:
+        check_redshift_params(redshift_params)
         logger.debug("Opening Session helper.")
         session_helper = SessionHelper(
             region = redshift_params['region'],
@@ -206,7 +222,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
             db_name = redshift_params['db_name']
         )
         session_helper.configure_session_helper()
-        create_schema(redshift_params['schema_name'], session_helper)
+        create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
         logger.debug('Schema created.')
 
     return files
