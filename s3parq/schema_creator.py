@@ -25,9 +25,3 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
 
         logger.info(f'Running query to create schema: {new_schema_query}')
         scope.execute(new_schema_query)
-
-
-
-#     query = f"ALTER TABLE {schema}.{table} \
-#               ADD PARTITION ({' ,'.join(formatted_partitions)}) \
-#               LOCATION 's3://{bucket}/{path_to_data}';"
