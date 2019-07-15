@@ -28,13 +28,17 @@ def check_dataframe_for_timedelta(dataframe: pd.DataFrame)->None:
             logger.debug(timedelta_message)
             raise NotImplementedError(timedelta_message)
 
+def _get_dataframe_datatypes(dataframe: pd.DataFrame) -> dict:
+    """ returns key/value paired dictionary of a dataframe's column names and column datatypes """
+    cols = dataframe.columns
+    types = dataframe.dtypes.to_list()
+    return dict(zip(cols, types))
 
 def _check_partition_compatibility(partition: str) -> bool:
     """ Make sure each partition value is hive-allowed."""
     reserved = "ALL, ALTER, AND, ARRAY, AS, AUTHORIZATION, BETWEEN, BIGINT, BINARY, BOOLEAN, BOTH, BY, CASE, CAST, CHAR, COLUMN, CONF, CREATE, CROSS, CUBE, CURRENT, CURRENT_DATE, CURRENT_TIMESTAMP, CURSOR, DATABASE, DATE, DECIMAL, DELETE, DESCRIBE, DISTINCT, DOUBLE, DROP, ELSE, END, EXCHANGE, EXISTS, EXTENDED, EXTERNAL, FALSE, FETCH, FLOAT, FOLLOWING, FOR, FROM, FULL, FUNCTION, GRANT, GROUP, GROUPING, HAVING, IF, IMPORT, IN, INNER, INSERT, INT, INTERSECT, INTERVAL, INTO, IS, JOIN, LATERAL, LEFT, LESS, LIKE, LOCAL, MACRO, MAP, MORE, NONE, NOT, NULL, OF, ON, OR, ORDER, OUT, OUTER, OVER, PARTIALSCAN, PARTITION, PERCENT, PRECEDING, PRESERVE, PROCEDURE, RANGE, READS, REDUCE, REVOKE, RIGHT, ROLLUP, ROW, ROWS, SELECT, SET, SMALLINT, TABLE, TABLESAMPLE, THEN, TIMESTAMP, TO, TRANSFORM, TRIGGER, TRUE, TRUNCATE, UNBOUNDED, UNION, UNIQUEJOIN, UPDATE, USER, USING, UTC_TMESTAMP, VALUES, VARCHAR, WHEN, WHERE, WINDOW, WITH, COMMIT, ONLY, REGEXP, RLIKE, ROLLBACK, START, CACHE, CONSTRAINT, FOREIGN, PRIMARY, REFERENCES, DAYOFWEEK, EXTRACT, FLOOR, INTEGER, PRECISION, VIEWS, TIME, NUMERIC, SYNC".split()
     reserved = [x.strip(',') for x in reserved]
     return not (partition.upper() in reserved)
-
 
 def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
     logger.debug("Checking partition args...")
