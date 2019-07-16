@@ -104,14 +104,14 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         logger.debug("Done appending metadata.")
     return all_files_without_meta
 
-def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[]) -> dict:
+def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=False) -> dict:
     """ returns key/value paired dictionary of a dataframe's column names and column datatypes.
         if partitions is included, only return datatypes for partition columns. """
     types = dict()
-    if partitions:
+    if use_parts:
         columns = partitions
     else:
-        columns = dataframe.columns
+        columns = dataframe.drop(labels=partitions, axis="columns").columns
     for col in columns:
         type_string = dataframe[col].dtype.name
         types[col] = type_string
@@ -237,8 +237,8 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
         logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
 
-        df_types = _get_dataframe_datatypes(dataframe)
-        partition_types = _get_dataframe_datatypes(dataframe, partitions)
+        df_types = _get_dataframe_datatypes(dataframe, partitions)
+        partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
         publish_redshift.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
         logger.debug(f"Table {redshift_params['table_name']} created.")
 

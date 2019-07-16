@@ -191,7 +191,12 @@ class Test:
     def test_partition_datatypes(self):
         columns, dataframe = self.setup_df()
         partitions = ["text_col", "int_col", "float_col"]
-        assert parq._get_dataframe_datatypes(dataframe, partitions) == {'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
+        assert parq._get_dataframe_datatypes(dataframe, partitions, True) == {'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
+
+    def test_dataframe_sans_partitions(self):
+        columns, dataframe = self.setup_df()
+        partitions = ["text_col", "int_col", "float_col"]
+        assert parq._get_dataframe_datatypes(dataframe, partitions) == {'grouped_col': 'object'}
 
     '''
     ## timedeltas no good

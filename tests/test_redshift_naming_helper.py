@@ -1,24 +1,23 @@
 import pytest
-from s3parq.redshift_naming_helper import RedshiftNamingHelper
+from s3parq import publish_redshift as rs
 
 
 def test_naming_validator():
-    helper = RedshiftNamingHelper()
     # Makes sure the schema name meets best practices
 
-    response = helper.validate_chars('my string')
+    response = rs._validate_name('my string')
     assert not response[0], response[1]
 
-    response = helper.validate_chars('my_string')
+    response = rs._validate_name('my_string')
     assert response[0], response[1]
 
-    response = helper.validate_chars('WHERE')
+    response = rs._validate_name('WHERE')
     assert not response[0], response[1]
 
-    response = helper.validate_chars('@my_string')
+    response = rs._validate_name('@my_string')
     assert not response[0], response[1]
 
-    response = helper.validate_chars(
+    response = rs._validate_name(
         "asdffdsaasdffdsaasdfasdffdsaasdffdsaasd\
         fasdffdsaasdffdsaasdfasdffdsaasdffdsaasdsd\
         ffdsaasdffdsaasdfasdffdsaasdffdsaasdfasdffdsaasdffdsaasdf"

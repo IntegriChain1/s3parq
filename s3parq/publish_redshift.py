@@ -47,7 +47,9 @@ def _datatype_mapper(columns: dict) -> dict:
             dtypes[col] = 'VARCHAR'
         elif dtype == 'bool':
             dtypes[col] = 'BOOLEAN'
-        sql_statement += f'{col} {dtypes[col]} ,'
+        else:
+            raise ValueError(f"Error: {dtype} is not a datatype which can be mapped to Redshift.")
+        sql_statement += f'{col} {dtypes[col]}, '
     return "(" + sql_statement[:-2] + ")"
 
 def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper):
@@ -70,7 +72,7 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
         new_schema_query = (
             f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
             PARTITIONED BY {redshift_partitions} STORED AS PARQUET \
-            LOCATION "{path}";'
+            LOCATION \'{path}\';'
         )
         logger.info(f'Running query to create table: {new_schema_query}')
         scope.execute(new_schema_query)
