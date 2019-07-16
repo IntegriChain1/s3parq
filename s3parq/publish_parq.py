@@ -7,8 +7,8 @@ import re
 import sys
 import logging
 from typing import List
-from s3parq.schema_creator import create_schema 
 from s3parq.session_helper import SessionHelper
+from s3parq import publish_redshift
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +28,6 @@ def check_dataframe_for_timedelta(dataframe: pd.DataFrame)->None:
             timedelta_message = "Pyarrow does not support parquet conversion of timedelta columns at this time."
             logger.debug(timedelta_message)
             raise NotImplementedError(timedelta_message)
-
-def _get_dataframe_datatypes(dataframe: pd.DataFrame) -> dict:
-    """ returns key/value paired dictionary of a dataframe's column names and column datatypes """
-    cols = dataframe.columns
-    types = []
-    for col in dataframe:
-        type_string = dataframe[col].dtype
-        types.append(type_string.name)
-
-    return dict(zip(cols, types))
 
 def _check_partition_compatibility(partition: str) -> bool:
     """ Make sure each partition value is hive-allowed."""
@@ -114,6 +104,18 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         logger.debug("Done appending metadata.")
     return all_files_without_meta
 
+def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[]) -> dict:
+    """ returns key/value paired dictionary of a dataframe's column names and column datatypes.
+        if partitions is included, only return datatypes for partition columns. """
+    types = dict()
+    if partitions:
+        columns = partitions
+    else:
+        columns = dataframe.columns
+    for col in columns:
+        type_string = dataframe[col].dtype.name
+        types[col] = type_string
+    return types
 
 def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
     """ Returns a dict with the column names as keys, the data types (in strings) as values."""
@@ -136,7 +138,6 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dic
             dtypes[col] = 'boolean'
     logger.debug(f"Done.Metadata set as {dtypes}")
     return dtypes
-
 
 def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
     """Takes a dataframe and slices it into sized dataframes for optimal parquet sizes in S3.
@@ -221,6 +222,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         files = files + published_files
 
     logger.debug("Done writing to S3.")
+
     if redshift_params:
         check_redshift_params(redshift_params)
         logger.debug("Opening Session helper.")
@@ -232,7 +234,12 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
             db_name = redshift_params['db_name']
         )
         session_helper.configure_session_helper()
-        create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
-        logger.debug('Schema created.')
+        publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+        logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
+
+        df_types = _get_dataframe_datatypes(dataframe)
+        partition_types = _get_dataframe_datatypes(dataframe, partitions)
+        publish_redshift.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
+        logger.debug(f"Table {redshift_params['table_name']} created.")
 
     return files
