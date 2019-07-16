@@ -6,16 +6,29 @@ import logging
 logger = logging.getLogger(__name__)
 
 #write a function for the switcher
-def datatype_mapper(dtype: str):
-    switcher = {
-        'object': 'VARCHAR',
-        'int64': 'int',
-        'float64': 'float',
-        'bool': 'BOOLEAN'
-    }
-    if switcher.get(dtype) is None:
-            raise KeyError()
-    return switcher.get(dtype)
+def _datatype_mapper(dataframe: pd.DataFrame, partitions: list) -> dict:
+    """ Returns a dict with the column names as keys, the data types (in strings) as values."""
+    logger.debug("Determining write metadata for publish...")
+    dataframe = dataframe[partitions]
+    dtypes = {}
+    sql_statement = ""
+    for col, dtype in dataframe.dtypes.items():
+        dtype = str(dtype)
+        if dtype == 'object':
+            dtypes[col] = 'VARCHAR'
+        elif dtype.startswith('int'):
+            dtypes[col] = 'INTEGER'
+        elif dtype.startswith('float'):
+            dtypes[col] = 'REAL'
+        elif dtype.startswith('date'):
+            dtypes[col] = 'TIMESTAMP'
+        elif dtype.startswith('category'):
+            dtypes[col] = 'VARCHAR'
+        elif dtype == 'bool':
+            dtypes[col] = 'BOOLEAN'
+        sql_statement += f'{col} {dtypes[col]} ,'
+    
+        
 
 def datatype_to_sql(dtypes: dict):
     cols = dtypes.keys
