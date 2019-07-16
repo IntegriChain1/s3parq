@@ -27,7 +27,8 @@ def _datatype_mapper(dataframe: pd.DataFrame, partitions: list) -> dict:
         elif dtype == 'bool':
             dtypes[col] = 'BOOLEAN'
         sql_statement += f'{col} {dtypes[col]} ,'
-    
+    return "(" + sql_statement[:-2] ")"
+
         
 
 def datatype_to_sql(dtypes: dict):
@@ -35,7 +36,7 @@ def datatype_to_sql(dtypes: dict):
     types = dtypes.values
     sql_statement = []
     for key, value in dtypes.items():
-            sql_statement.append(f'{key} as {datatype_mapper(value)}')
+        sql_statement.append(f'{key} as {datatype_mapper(value)}')
     return ', '.join(sql_statement)
 
 
