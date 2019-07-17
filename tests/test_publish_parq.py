@@ -139,9 +139,9 @@ class Test:
         parq.publish(bucket=bucket, key=key,
                         dataframe=dataframe, partitions=partitions)
 
-    @patch('s3parq.schema_creator.create_schema')
+    @patch('s3parq.publish_redshift.create_schema')
     @patch('s3parq.publish_parq.SessionHelper')
-    def test_redshift_publish(self, mock_session_helper, mock_create_schema):
+    def test_schema_publish(self, mock_session_helper, mock_create_schema):
         columns, dataframe = self.setup_df()
         bucket, key = self.setup_s3()
         partitions = []
@@ -158,29 +158,42 @@ class Test:
         parq.publish(bucket=bucket, key=key,
                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
-        mock_create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
+        mock_create_schema.assert_called_once_with(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
 
-        mock_create_schema.assert_called_once_with(redshift_params['schema_name'],redshift_params['db_name'], redshift_params['iam_role'], msh)
+    @patch('s3parq.publish_redshift.create_table')
+    @patch('s3parq.publish_parq.SessionHelper')
+    def test_table_publish(self, mock_session_helper, mock_create_table):
+        columns, dataframe = self.setup_df()
+        bucket, key = self.setup_s3()
+        partitions = ["text_col", "int_col", "float_col"]
+        redshift_params = self.setup_redshift_params()
+        msh = mock_session_helper(
+            region = redshift_params['region'],
+            cluster_id = redshift_params['cluster'],
+            host = redshift_params['host'],
+            port = redshift_params['port'],
+            db_name = redshift_params['db_name']
+            )
+            
+        msh.configure_session_helper()
+        parq.publish(bucket=bucket, key=key,
+                        dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
+        
+        df_types = parq._get_dataframe_datatypes(dataframe, partitions)
+        partition_types = parq._get_dataframe_datatypes(dataframe, partitions, True)
+
+        mock_create_table.assert_called_once_with(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
 
     def test_df_datatypes(self):
         columns, dataframe = self.setup_df()
         assert parq._get_dataframe_datatypes(dataframe) == {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
 
-    '''
-    ## timedeltas no good
-    def test_timedeltas_rejected(self):
-        bucket = MockHelper().random_name()
-        key = MockHelper().random_name()
+    def test_partition_datatypes(self):
+        columns, dataframe = self.setup_df()
+        partitions = ["text_col", "int_col", "float_col"]
+        assert parq._get_dataframe_datatypes(dataframe, partitions, True) == {'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
 
-        s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket=bucket)
-
-        df = DFMock(count=100)
-        df.columns = {"timedelta_col": "timedelta", "int_col": "int", "float_col": "float",
-                      "bool_col": "boolean", "grouped_col": {"option_count": 4, "option_type": "string"}}
-        df.generate_dataframe()
-
-        with pytest.raises(NotImplementedError):
-            parq = pub_parq.S3PublishParq(
-                dataframe=df.dataframe, bucket=bucket, key=key, partitions=['grouped_col'])
-'''
+    def test_dataframe_sans_partitions(self):
+        columns, dataframe = self.setup_df()
+        partitions = ["text_col", "int_col", "float_col"]
+        assert parq._get_dataframe_datatypes(dataframe, partitions) == {'grouped_col': 'object'}

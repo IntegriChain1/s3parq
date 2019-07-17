@@ -7,8 +7,8 @@ import re
 import sys
 import logging
 from typing import List
-from s3parq.schema_creator import create_schema 
 from s3parq.session_helper import SessionHelper
+from s3parq import publish_redshift
 
 logger = logging.getLogger(__name__)
 
@@ -29,20 +29,9 @@ def check_dataframe_for_timedelta(dataframe: pd.DataFrame)->None:
             logger.debug(timedelta_message)
             raise NotImplementedError(timedelta_message)
 
-def _get_dataframe_datatypes(dataframe: pd.DataFrame) -> dict:
-    """ returns key/value paired dictionary of a dataframe's column names and column datatypes """
-    cols = dataframe.columns
-    types = []
-    for col in dataframe:
-        type_string = dataframe[col].dtype
-        types.append(type_string.name)
-
-    return dict(zip(cols, types))
-
 def _check_partition_compatibility(partition: str) -> bool:
     """ Make sure each partition value is hive-allowed."""
-    reserved = "ALL, ALTER, AND, ARRAY, AS, AUTHORIZATION, BETWEEN, BIGINT, BINARY, BOOLEAN, BOTH, BY, CASE, CAST, CHAR, COLUMN, CONF, CREATE, CROSS, CUBE, CURRENT, CURRENT_DATE, CURRENT_TIMESTAMP, CURSOR, DATABASE, DATE, DECIMAL, DELETE, DESCRIBE, DISTINCT, DOUBLE, DROP, ELSE, END, EXCHANGE, EXISTS, EXTENDED, EXTERNAL, FALSE, FETCH, FLOAT, FOLLOWING, FOR, FROM, FULL, FUNCTION, GRANT, GROUP, GROUPING, HAVING, IF, IMPORT, IN, INNER, INSERT, INT, INTERSECT, INTERVAL, INTO, IS, JOIN, LATERAL, LEFT, LESS, LIKE, LOCAL, MACRO, MAP, MORE, NONE, NOT, NULL, OF, ON, OR, ORDER, OUT, OUTER, OVER, PARTIALSCAN, PARTITION, PERCENT, PRECEDING, PRESERVE, PROCEDURE, RANGE, READS, REDUCE, REVOKE, RIGHT, ROLLUP, ROW, ROWS, SELECT, SET, SMALLINT, TABLE, TABLESAMPLE, THEN, TIMESTAMP, TO, TRANSFORM, TRIGGER, TRUE, TRUNCATE, UNBOUNDED, UNION, UNIQUEJOIN, UPDATE, USER, USING, UTC_TMESTAMP, VALUES, VARCHAR, WHEN, WHERE, WINDOW, WITH, COMMIT, ONLY, REGEXP, RLIKE, ROLLBACK, START, CACHE, CONSTRAINT, FOREIGN, PRIMARY, REFERENCES, DAYOFWEEK, EXTRACT, FLOOR, INTEGER, PRECISION, VIEWS, TIME, NUMERIC, SYNC".split()
-    reserved = [x.strip(',') for x in reserved]
+    reserved = "ALL ALTER AND ARRAY AS AUTHORIZATION BETWEEN BIGINT BINARY BOOLEAN BOTH BY CASE CAST CHAR COLUMN CONF CREATE CROSS CUBE CURRENT CURRENT_DATE CURRENT_TIMESTAMP CURSOR DATABASE DATE DECIMAL DELETE DESCRIBE DISTINCT DOUBLE DROP ELSE END EXCHANGE EXISTS EXTENDED EXTERNAL FALSE FETCH FLOAT FOLLOWING FOR FROM FULL FUNCTION GRANT GROUP GROUPING HAVING IF IMPORT IN INNER INSERT INT INTERSECT INTERVAL INTO IS JOIN LATERAL LEFT LESS LIKE LOCAL MACRO MAP MORE NONE NOT NULL OF ON OR ORDER OUT OUTER OVER PARTIALSCAN PARTITION PERCENT PRECEDING PRESERVE PROCEDURE RANGE READS REDUCE REVOKE RIGHT ROLLUP ROW ROWS SELECT SET SMALLINT TABLE TABLESAMPLE THEN TIMESTAMP TO TRANSFORM TRIGGER TRUE TRUNCATE UNBOUNDED UNION UNIQUEJOIN UPDATE USER USING UTC_TMESTAMP VALUES VARCHAR WHEN WHERE WINDOW WITH COMMIT ONLY REGEXP RLIKE ROLLBACK START CACHE CONSTRAINT FOREIGN PRIMARY REFERENCES DAYOFWEEK EXTRACT FLOOR INTEGER PRECISION VIEWS TIME NUMERIC SYNC".split()
     return not (partition.upper() in reserved)
 
 def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
@@ -114,6 +103,18 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         logger.debug("Done appending metadata.")
     return all_files_without_meta
 
+def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=False) -> dict:
+    """ returns key/value paired dictionary of a dataframe's column names and column datatypes.
+        if partitions is included, only return datatypes for partition columns. """
+    types = dict()
+    if use_parts:
+        columns = partitions
+    else:
+        columns = dataframe.drop(labels=partitions, axis="columns").columns
+    for col in columns:
+        type_string = dataframe[col].dtype.name
+        types[col] = type_string
+    return types
 
 def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
     """ Returns a dict with the column names as keys, the data types (in strings) as values."""
@@ -136,7 +137,6 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dic
             dtypes[col] = 'boolean'
     logger.debug(f"Done.Metadata set as {dtypes}")
     return dtypes
-
 
 def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
     """Takes a dataframe and slices it into sized dataframes for optimal parquet sizes in S3.
@@ -221,6 +221,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         files = files + published_files
 
     logger.debug("Done writing to S3.")
+
     if redshift_params:
         check_redshift_params(redshift_params)
         logger.debug("Opening Session helper.")
@@ -232,7 +233,12 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
             db_name = redshift_params['db_name']
         )
         session_helper.configure_session_helper()
-        create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
-        logger.debug('Schema created.')
+        publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+        logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
+
+        df_types = _get_dataframe_datatypes(dataframe, partitions)
+        partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
+        publish_redshift.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
+        logger.debug(f"Table {redshift_params['table_name']} created.")
 
     return files
