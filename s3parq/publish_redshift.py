@@ -23,7 +23,7 @@ def _validate_name(name: str):
     else:
         return tuple([True, None])
 
-def redshift_name_validator(*args):
+def _redshift_name_validator(*args):
     for arg in args:
         response = _validate_name(arg)
         if not response[0]:
@@ -53,7 +53,7 @@ def _datatype_mapper(columns: dict) -> dict:
     return "(" + sql_statement[:-2] + ")"
 
 def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper):
-    redshift_name_validator(schema_name, db_name)
+    _redshift_name_validator(schema_name, db_name)
     with session_helper.db_session_scope() as scope:
         new_schema_query = f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
                 FROM DATA CATALOG \
@@ -65,7 +65,7 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
         scope.execute(new_schema_query)
 
 def create_table(table_name: str, schema_name: str, columns: dict, partitions: dict, path: str, session_helper: SessionHelper):
-    redshift_name_validator(table_name)
+    _redshift_name_validator(table_name)
     redshift_columns = _datatype_mapper(columns)
     redshift_partitions = _datatype_mapper(partitions)
     with session_helper.db_session_scope() as scope:
