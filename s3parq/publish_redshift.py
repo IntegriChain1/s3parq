@@ -201,7 +201,7 @@ def create_partitions(bucket: str, schema: str, table: str, filepath: str, sessi
 
     with session_helper.db_session_scope() as scope:
         partitions_query = f"ALTER TABLE {schema}.{table} \
-            ADD PARTITION ({' ,'.join(formatted_partitions)}) \
+            ADD PARTITION ({', '.join(formatted_partitions)}) \
             LOCATION 's3://{bucket}/{path_to_data}';"
         logger.info(f'Running query to create: {partitions_query}')
         scope.execute(partitions_query)    
