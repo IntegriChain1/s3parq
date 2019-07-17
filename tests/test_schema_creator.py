@@ -19,9 +19,9 @@ class Test():
         schema_name_bad = "my string"
         database_name_good = 'my_database'
         database_name_bad = 'my database'
-        publish_redshift.redshift_name_validator(schema_name_good, database_name_good)
+        publish_redshift._redshift_name_validator(schema_name_good, database_name_good)
         with pytest.raises(ValueError):
-            publish_redshift.redshift_name_validator(schema_name_bad, database_name_bad)
+            publish_redshift._redshift_name_validator(schema_name_bad, database_name_bad)
 
     # Test that the function is called with the schema name
     @patch('s3parq.publish_redshift.SessionHelper')

@@ -179,8 +179,8 @@ class Test:
         parq.publish(bucket=bucket, key=key,
                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
         
-        df_types = parq._get_dataframe_datatypes(dataframe)
-        partition_types = parq._get_dataframe_datatypes(dataframe, partitions)
+        df_types = parq._get_dataframe_datatypes(dataframe, partitions)
+        partition_types = parq._get_dataframe_datatypes(dataframe, partitions, True)
 
         mock_create_table.assert_called_once_with(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
 
@@ -197,22 +197,3 @@ class Test:
         columns, dataframe = self.setup_df()
         partitions = ["text_col", "int_col", "float_col"]
         assert parq._get_dataframe_datatypes(dataframe, partitions) == {'grouped_col': 'object'}
-
-    '''
-    ## timedeltas no good
-    def test_timedeltas_rejected(self):
-        bucket = MockHelper().random_name()
-        key = MockHelper().random_name()
-
-        s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket=bucket)
-
-        df = DFMock(count=100)
-        df.columns = {"timedelta_col": "timedelta", "int_col": "int", "float_col": "float",
-                      "bool_col": "boolean", "grouped_col": {"option_count": 4, "option_type": "string"}}
-        df.generate_dataframe()
-
-        with pytest.raises(NotImplementedError):
-            parq = pub_parq.S3PublishParq(
-                dataframe=df.dataframe, bucket=bucket, key=key, partitions=['grouped_col'])
-'''
