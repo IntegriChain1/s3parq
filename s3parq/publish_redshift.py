@@ -198,7 +198,10 @@ def create_partitions(bucket: str, schema: str, table: str, filepath: str, sessi
     partitions = _get_partitions_for_spectrum(filepath)
     formatted_partitions = _format_partition_strings_for_sql(partitions)
     path_to_data = _get_partition_location(filepath)
-    query = f"ALTER TABLE {schema}.{table} \
-              ADD PARTITION ({' ,'.join(formatted_partitions)}) \
-              LOCATION 's3://{bucket}/{path_to_data}';"
-    return query
+
+    with session_helper.db_session_scope() as scope:
+        partitions_query = f"ALTER TABLE {schema}.{table} \
+            ADD PARTITION ({', '.join(formatted_partitions)}) \
+            LOCATION 's3://{bucket}/{path_to_data}';"
+        logger.info(f'Running query to create: {partitions_query}')
+        scope.execute(partitions_query)    
