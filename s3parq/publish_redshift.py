@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 def _is_reserved_keyword(name: str):
     reserved = "AES128 AES256 ALL ALLOWOVERWRITE ANALYSE ANALYZE AND ANY ARRAY AS ASC AUTHORIZATION BACKUP BETWEEN BINARY BLANKSASNULL BOTH BYTEDICT BZIP2 CASE CAST CHECK COLLATE COLUMN CONSTRAINT CREATE CREDENTIALS CROSS CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP CURRENT_USER CURRENT_USER_ID DEFAULT DEFERRABLE DEFLATE DEFRAG DELTA DELTA32K DESC DISABLE DISTINCT DO ELSE EMPTYASNULL ENABLE ENCODE ENCRYPT ENCRYPTION END EXCEPT EXPLICIT FALSE FOR FOREIGN FREEZE FROM FULL GLOBALDICT256 GLOBALDICT64K GRANT GROUP GZIP HAVING IDENTITY IGNORE ILIKE IN INITIALLY INNER INTERSECT INTO IS ISNULL JOIN LANGUAGE LEADING LEFT LIKE LIMIT LOCALTIME LOCALTIMESTAMP LUN LUNS LZO LZOP MINUS MOSTLY13 MOSTLY32 MOSTLY8 NATURAL NEW NOT NOTNULL NULL NULLS OFF OFFLINE OFFSET OID OLD ON ONLY OPEN OR ORDER OUTER OVERLAPS PARALLEL PARTITION PERCENT PERMISSIONS PLACING PRIMARY RAW READRATIO RECOVER REFERENCES RESPECT REJECTLOG RESORT RESTORE RIGHT SELECT SESSION_USER SIMILAR SNAPSHOT  SOME SYSDATE SYSTEM TABLE TAG TDES TEXT255 TEXT32K THEN TIMESTAMP TO TOP TRAILING TRUE TRUNCATECOLUMNS UNION UNIQUE USER USING VERBOSE WALLET WHEN WHERE WITH WITHOUT".split()
-    return not (name.upper() in reserved)
+    return not(name.upper() in reserved)
 
 def _validate_name(name: str):
     if not _is_reserved_keyword(name):
@@ -26,6 +26,103 @@ def _redshift_name_validator(*args):
         response = _validate_name(arg)
         if not response[0]:
             raise ValueError(response[1])
+
+def _get_partitions_for_spectrum(filename: str) -> [str]:
+    '''
+    Turns S3 filepath with partitions into list of only those partitions as strings
+    Args:
+        filename (str): entire filepath for a single file
+    ----
+    Returns:
+        final_partitions (list of strings): these are the partitions for that file
+    --------
+    Example:
+        Args:
+            filename = 'some-path/to/data/zipcode=12345/birth_month=january/final_data_set.parquet
+        ----
+        Returns:
+            final_partitions = ['zipcode=12345', 'birth_month=january']
+    '''
+    filepath = filename.split('/')
+    final_partitions = [_dir for _dir in filepath if '=' in _dir]
+    return final_partitions
+
+
+def _format_partition_strings_for_sql(partitions: [str]) -> [str]:
+    '''
+    Formats a list of S3 partition strings for SQL statements
+    Args:
+        partitions ([str]): list of strings representing the partitions in S3
+    ----
+    Returns:
+        formatted_partitions ([str]): list of the same partitions with quotes
+        to use for SQL
+    --------
+    Example:
+        Args:
+            partitions = ['hamburger=abcd', 'hot_dog=1234']
+        ----
+        Returns:
+            formatted_partitions = ["hamburger='abcd'", "hot_dog='1234'"]
+    '''
+    formatted_partitions = []
+    for p in partitions:
+        key, value = p.split('=')
+        value = f"'{value}'"
+        formatted_partitions.append(f'{key}={value}')
+    return formatted_partitions
+
+
+def _last_index_containing_substring(the_list: [str], substring: str) -> int:
+    '''
+    Returns index of last string that contains a substring within a list.  If there's no match, it returns
+    the length of the list + 1 because we want the function that uses it "_get_partition_location"
+    to not identify any partitions if none exists
+    Args:
+        the_list ([str]): list of strings, probably representing the partitions
+        substring (str): string to look for in the_list
+    ----
+    Returns:
+        i (int): The index in the list that contains the first instance of the substring
+        returns -1 if no matches
+    --------
+    Example:
+        Args: 
+            the_list = ['path', 'to', 'data', 'hamburger=abcd', 'hot_dog=1234', 'the_file.parquet]
+            substring = '='
+        ----
+        Returns:
+            i = 3
+        
+    '''
+    for s in reversed(the_list):
+        if substring in s:
+            return len(the_list) - the_list.index(s)
+    return len(the_list) + 1
+
+
+def _get_partition_location(filepath: str):
+    '''
+    Gets location of data in S3 for partitioning in S3.  You need to know the path to 
+    the first partition in order to make a proper Spectrum partition w/ SQL-Redshift
+    Args:
+        filepath (str): path to a file in S3 that is partitioned
+    Returns:
+        final_path (str): path within S3 bucket that has the last partition of a filepath
+    Example:
+        Args: 
+            filepath = 'path/to/data/hamburger=abcd/hot_dog=1234/abcd1234.parquet'
+        Returns:
+            final_path = 'path/to/data/hamburger=abcd/hot_dog=1234'
+    '''
+    separate_dirs = filepath.split('/')
+    last_partition = _last_index_containing_substring(separate_dirs, "=")
+    final_set = separate_dirs[:-last_partition + 1] #  I think this is more confusing than it has to be
+    final_path = '/'.join(final_set)
+    if final_path == '':
+        raise ValueError(f'No partitions in this filepath {filepath}')
+    return final_path
+
 
 def _datatype_mapper(columns: dict) -> dict:
     """ Takes a dict of column names and pandas dtypes and returns a redshift create table statement of column names/dtypes."""
@@ -48,7 +145,7 @@ def _datatype_mapper(columns: dict) -> dict:
         else:
             raise ValueError(f"Error: {dtype} is not a datatype which can be mapped to Redshift.")
         sql_statement += f'{col} {dtypes[col]}, '
-    return "(" + sql_statement[:-2] + ")"
+    return f"({sql_statement[:-2]})"
 
 def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper):
     """Creates a schema in AWS redshift using a given iam_role. The schema is named schema_name and belongs to the (existing) Redshift db db_name."""
@@ -76,3 +173,32 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
         )
         logger.info(f'Running query to create table: {new_schema_query}')
         scope.execute(new_schema_query)
+
+def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> str:
+    '''
+    Generates partitioning SQL
+    Args:
+        bucket (str): S3 bucket where data is stored
+        schema (str): name of redshift schema (must already exist)
+        table (str): name of table in schema.  Must have partitions scoped out in `CREATE TABLE ...`
+        filepath (str): path to data in S3 that will be queryable by it's partitions
+    ----
+    Returns:
+        query (str): a raw SQL string that adds the partitioned data to the table
+    --------
+    Example:
+        Args:
+            bucket = 'MyBucket'
+            schema = 'MySchema'
+            table = 'MyTable'
+            filepath = 'path/to/data/apple=abcd/banana=1234/abcd1234.parquet'
+        Returns:
+            "ALTER TABLE MySchema.MyTable               ADD PARTITION (apple='abcd' ,banana='1234')               LOCATION 's3://MyBucket/path/to/data/apple=abcd';"
+    '''
+    partitions = _get_partitions_for_spectrum(filepath)
+    formatted_partitions = _format_partition_strings_for_sql(partitions)
+    path_to_data = _get_partition_location(filepath)
+    query = f"ALTER TABLE {schema}.{table} \
+              ADD PARTITION ({' ,'.join(formatted_partitions)}) \
+              LOCATION 's3://{bucket}/{path_to_data}';"
+    return query
