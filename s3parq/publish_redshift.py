@@ -166,11 +166,18 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
     redshift_columns = _datatype_mapper(columns)
     redshift_partitions = _datatype_mapper(partitions)
     with session_helper.db_session_scope() as scope:
-        new_schema_query = (
-            f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
-            PARTITIONED BY {redshift_partitions} STORED AS PARQUET \
-            LOCATION \'{path}\';'
-        )
+        if not partitions:
+            new_schema_query = (
+                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
+                STORED AS PARQUET \
+                LOCATION \'{path}\';'
+            )
+        else:
+            new_schema_query = (
+                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
+                PARTITIONED BY {redshift_partitions} STORED AS PARQUET \
+                LOCATION \'{path}\';'
+            )
         logger.info(f'Running query to create table: {new_schema_query}')
         scope.execute(new_schema_query)
 
