@@ -1,14 +1,11 @@
-import boto3
+import boto3, s3fs, re, sys, logging
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import s3fs
-import re
-import sys
-import logging
 from typing import List
 from s3parq.session_helper import SessionHelper
 from s3parq import publish_redshift
+from sqlalchemy import Column, Integer, String
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +62,6 @@ def check_redshift_params(redshift_params: list):
 def s3_url(bucket: str, key: str):
     return '/'.join(["s3:/", bucket, key])
 
-
 def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
                        partitions: list) -> None:
     """ pushes the parquet dataset directly to s3. """
@@ -79,7 +75,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     logger.debug("Done writing to location.")
 
 
-def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: iter) -> List[str]:
+def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: List['str'], session_helper: SessionHelper, redshift_params=None) -> List[str]:
     """ assigns the dataset partition meta to all keys in the dataset"""
     s3_client = boto3.client('s3')
     all_files_without_meta = []
@@ -91,7 +87,8 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 head_obj = s3_client.head_object(Bucket=bucket, Key=obj['Key'])
                 if not 'partition_data_types' in head_obj['Metadata']:
                     all_files_without_meta.append(obj['Key'])
-    
+                    if redshift_params and partitions:
+                        sql_command = publish_redshift.create_partitions(bucket, redshift_params['schema_name'], redshift_params['table_name'], obj['Key'], session_helper)
 
     for obj in all_files_without_meta:
         logger.debug(f"Appending metadata to file {obj}..")
@@ -188,7 +185,7 @@ ideal size: {ideal_size} bytes
     return tuple(sized_frames)
 
 
-def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, redshift_params = None) -> None:
+def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFrame, redshift_params = None) -> None:
     """Redshift Params:
         ARGS: 
             schema_name: str
@@ -200,6 +197,28 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
             port: str 
             db_name: str
     """
+    session_helper = None
+
+    if redshift_params and partitions:
+        logger.debug("Found redshift parameters. Checking validity of params...")
+        check_redshift_params(redshift_params)
+        logger.debug("Redshift parameters valid. Opening Session helper.")
+        session_helper = SessionHelper(
+            region = redshift_params['region'],
+            cluster_id = redshift_params['cluster'],
+            host = redshift_params['host'],
+            port = redshift_params['port'],
+            db_name = redshift_params['db_name']
+        )
+        session_helper.configure_session_helper()
+        publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+        logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
+
+        df_types = _get_dataframe_datatypes(dataframe, partitions)
+        partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
+        publish_redshift.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
+        logger.debug(f"Table {redshift_params['table_name']} created.")
+
     logger.info("Checking params...")
     check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
@@ -217,28 +236,11 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
         published_files = _assign_partition_meta(bucket=bucket,
                                                  key=key,
                                                  dataframe=dataframe,
-                                                 partitions=partitions)
+                                                 partitions=partitions,
+                                                 session_helper=session_helper, 
+                                                 redshift_params=redshift_params)
         files = files + published_files
 
     logger.debug("Done writing to S3.")
-
-    if redshift_params:
-        check_redshift_params(redshift_params)
-        logger.debug("Opening Session helper.")
-        session_helper = SessionHelper(
-            region = redshift_params['region'],
-            cluster_id = redshift_params['cluster'],
-            host = redshift_params['host'],
-            port = redshift_params['port'],
-            db_name = redshift_params['db_name']
-        )
-        session_helper.configure_session_helper()
-        publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
-        logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
-
-        df_types = _get_dataframe_datatypes(dataframe, partitions)
-        partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
-        publish_redshift.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
-        logger.debug(f"Table {redshift_params['table_name']} created.")
 
     return files
