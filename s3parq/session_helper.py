@@ -81,7 +81,7 @@ class SessionHelper:
             yield session
             session.commit()
         except Exception as e:
-            logging.error(e)
             session.rollback()
+            raise e
         finally:
             session.close()

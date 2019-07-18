@@ -199,7 +199,7 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
     """
     session_helper = None
 
-    if redshift_params and partitions:
+    if redshift_params:
         logger.debug("Found redshift parameters. Checking validity of params...")
         check_redshift_params(redshift_params)
         logger.debug("Redshift parameters valid. Opening Session helper.")
