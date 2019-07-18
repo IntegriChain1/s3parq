@@ -144,7 +144,7 @@ class Test:
     def test_schema_publish(self, mock_session_helper, mock_create_schema):
         columns, dataframe = self.setup_df()
         bucket, key = self.setup_s3()
-        partitions = []
+        partitions = [columns[0]]
         redshift_params = self.setup_redshift_params()
         msh = mock_session_helper(
             region = redshift_params['region'],
