@@ -145,7 +145,7 @@ def _datatype_mapper(columns: dict) -> dict:
         else:
             raise ValueError(f"Error: {dtype} is not a datatype which can be mapped to Redshift.")
         sql_statement += f'{col} {dtypes[col]}, '
-    return f"({sql_statement[:-2]})"
+    return f"({sql_statement[:-2]})" # Slice off the last space and comma
 
 def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper):
     """Creates a schema in AWS redshift using a given iam_role. The schema is named schema_name and belongs to the (existing) Redshift db db_name."""

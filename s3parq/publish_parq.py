@@ -75,7 +75,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     logger.debug("Done writing to location.")
 
 
-def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: iter, session_helper: SessionHelper, redshift_params: dict) -> List[str]:
+def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: List['str'], session_helper: SessionHelper, redshift_params=None) -> List[str]:
     """ assigns the dataset partition meta to all keys in the dataset"""
     s3_client = boto3.client('s3')
     all_files_without_meta = []
@@ -87,9 +87,8 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 head_obj = s3_client.head_object(Bucket=bucket, Key=obj['Key'])
                 if not 'partition_data_types' in head_obj['Metadata']:
                     all_files_without_meta.append(obj['Key'])
-                if redshift_params:
-                    sql_command = publish_redshift.create_partitions(bucket, redshift_params['schema_name'], redshift_params['table_name'], obj['Key'], session_helper)
-    
+                    if redshift_params and partitions:
+                        sql_command = publish_redshift.create_partitions(bucket, redshift_params['schema_name'], redshift_params['table_name'], obj['Key'], session_helper)
 
     for obj in all_files_without_meta:
         logger.debug(f"Appending metadata to file {obj}..")
@@ -186,7 +185,7 @@ ideal size: {ideal_size} bytes
     return tuple(sized_frames)
 
 
-def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, redshift_params = None) -> None:
+def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFrame, redshift_params = None) -> None:
     """Redshift Params:
         ARGS: 
             schema_name: str
@@ -200,7 +199,7 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
     """
     session_helper = None
 
-    if redshift_params:
+    if redshift_params and partitions:
         logger.debug("Found redshift parameters. Checking validity of params...")
         check_redshift_params(redshift_params)
         logger.debug("Redshift parameters valid. Opening Session helper.")
@@ -238,7 +237,8 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame, re
                                                  key=key,
                                                  dataframe=dataframe,
                                                  partitions=partitions,
-                                                 session_helper=session_helper, redshift_params=redshift_params)
+                                                 session_helper=session_helper, 
+                                                 redshift_params=redshift_params)
         files = files + published_files
 
     logger.debug("Done writing to S3.")
