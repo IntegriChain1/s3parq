@@ -1,12 +1,11 @@
-import boto3
+import boto3, s3fs, re, sys, logging
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import s3fs
-import sys
-import logging
 from typing import List
-
+from s3parq.session_helper import SessionHelper
+from s3parq import publish_redshift
+from sqlalchemy import Column, Integer, String
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +26,10 @@ def check_dataframe_for_timedelta(dataframe: pd.DataFrame)->None:
             logger.debug(timedelta_message)
             raise NotImplementedError(timedelta_message)
 
-
 def _check_partition_compatibility(partition: str) -> bool:
     """ Make sure each partition value is hive-allowed."""
-    reserved = "ALL, ALTER, AND, ARRAY, AS, AUTHORIZATION, BETWEEN, BIGINT, BINARY, BOOLEAN, BOTH, BY, CASE, CAST, CHAR, COLUMN, CONF, CREATE, CROSS, CUBE, CURRENT, CURRENT_DATE, CURRENT_TIMESTAMP, CURSOR, DATABASE, DATE, DECIMAL, DELETE, DESCRIBE, DISTINCT, DOUBLE, DROP, ELSE, END, EXCHANGE, EXISTS, EXTENDED, EXTERNAL, FALSE, FETCH, FLOAT, FOLLOWING, FOR, FROM, FULL, FUNCTION, GRANT, GROUP, GROUPING, HAVING, IF, IMPORT, IN, INNER, INSERT, INT, INTERSECT, INTERVAL, INTO, IS, JOIN, LATERAL, LEFT, LESS, LIKE, LOCAL, MACRO, MAP, MORE, NONE, NOT, NULL, OF, ON, OR, ORDER, OUT, OUTER, OVER, PARTIALSCAN, PARTITION, PERCENT, PRECEDING, PRESERVE, PROCEDURE, RANGE, READS, REDUCE, REVOKE, RIGHT, ROLLUP, ROW, ROWS, SELECT, SET, SMALLINT, TABLE, TABLESAMPLE, THEN, TIMESTAMP, TO, TRANSFORM, TRIGGER, TRUE, TRUNCATE, UNBOUNDED, UNION, UNIQUEJOIN, UPDATE, USER, USING, UTC_TMESTAMP, VALUES, VARCHAR, WHEN, WHERE, WINDOW, WITH, COMMIT, ONLY, REGEXP, RLIKE, ROLLBACK, START, CACHE, CONSTRAINT, FOREIGN, PRIMARY, REFERENCES, DAYOFWEEK, EXTRACT, FLOOR, INTEGER, PRECISION, VIEWS, TIME, NUMERIC, SYNC".split()
-    reserved = [x.strip(',') for x in reserved]
+    reserved = "ALL ALTER AND ARRAY AS AUTHORIZATION BETWEEN BIGINT BINARY BOOLEAN BOTH BY CASE CAST CHAR COLUMN CONF CREATE CROSS CUBE CURRENT CURRENT_DATE CURRENT_TIMESTAMP CURSOR DATABASE DATE DECIMAL DELETE DESCRIBE DISTINCT DOUBLE DROP ELSE END EXCHANGE EXISTS EXTENDED EXTERNAL FALSE FETCH FLOAT FOLLOWING FOR FROM FULL FUNCTION GRANT GROUP GROUPING HAVING IF IMPORT IN INNER INSERT INT INTERSECT INTERVAL INTO IS JOIN LATERAL LEFT LESS LIKE LOCAL MACRO MAP MORE NONE NOT NULL OF ON OR ORDER OUT OUTER OVER PARTIALSCAN PARTITION PERCENT PRECEDING PRESERVE PROCEDURE RANGE READS REDUCE REVOKE RIGHT ROLLUP ROW ROWS SELECT SET SMALLINT TABLE TABLESAMPLE THEN TIMESTAMP TO TRANSFORM TRIGGER TRUE TRUNCATE UNBOUNDED UNION UNIQUEJOIN UPDATE USER USING UTC_TMESTAMP VALUES VARCHAR WHEN WHERE WINDOW WITH COMMIT ONLY REGEXP RLIKE ROLLBACK START CACHE CONSTRAINT FOREIGN PRIMARY REFERENCES DAYOFWEEK EXTRACT FLOOR INTEGER PRECISION VIEWS TIME NUMERIC SYNC".split()
     return not (partition.upper() in reserved)
-
 
 def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
     logger.debug("Checking partition args...")
@@ -49,9 +45,22 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
     logger.debug("Done checking partitions.")
 
 
+def check_redshift_params(redshift_params: list):
+    logger.debug("Checking redshift params are correctly formatted")
+    number_redshift_params = 8
+    if len(redshift_params) != number_redshift_params:
+        params_length_message = f"Expected parameters: {number_redshift_params}. Received: {len(redshift_params)}"
+        raise ValueError(params_length_message)
+    for item in redshift_params:
+        if type(item) != str:
+            params_type_message = f"Expected type: String. Received: {type(item)}"
+            raise ValueError(params_type_message)
+
+    logger.debug('Done checking redshift params')
+
+
 def s3_url(bucket: str, key: str):
     return '/'.join(["s3:/", bucket, key])
-
 
 def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
                        partitions: list) -> None:
@@ -66,7 +75,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     logger.debug("Done writing to location.")
 
 
-def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: iter) -> List[str]:
+def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: List['str'], session_helper: SessionHelper, redshift_params=None) -> List[str]:
     """ assigns the dataset partition meta to all keys in the dataset"""
     s3_client = boto3.client('s3')
     all_files_without_meta = []
@@ -78,7 +87,8 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 head_obj = s3_client.head_object(Bucket=bucket, Key=obj['Key'])
                 if not 'partition_data_types' in head_obj['Metadata']:
                     all_files_without_meta.append(obj['Key'])
-    
+                    if redshift_params and partitions:
+                        sql_command = publish_redshift.create_partitions(bucket, redshift_params['schema_name'], redshift_params['table_name'], obj['Key'], session_helper)
 
     for obj in all_files_without_meta:
         logger.debug(f"Appending metadata to file {obj}..")
@@ -90,6 +100,18 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         logger.debug("Done appending metadata.")
     return all_files_without_meta
 
+def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=False) -> dict:
+    """ returns key/value paired dictionary of a dataframe's column names and column datatypes.
+        if partitions is included, only return datatypes for partition columns. """
+    types = dict()
+    if use_parts:
+        columns = partitions
+    else:
+        columns = dataframe.drop(labels=partitions, axis="columns").columns
+    for col in columns:
+        type_string = dataframe[col].dtype.name
+        types[col] = type_string
+    return types
 
 def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
     """ Returns a dict with the column names as keys, the data types (in strings) as values."""
@@ -112,7 +134,6 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dic
             dtypes[col] = 'boolean'
     logger.debug(f"Done.Metadata set as {dtypes}")
     return dtypes
-
 
 def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
     """Takes a dataframe and slices it into sized dataframes for optimal parquet sizes in S3.
@@ -164,11 +185,44 @@ ideal size: {ideal_size} bytes
     return tuple(sized_frames)
 
 
-def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) -> None:
+def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFrame, redshift_params = None) -> None:
+    """Redshift Params:
+        ARGS: 
+            schema_name: str
+            table_name: str
+            iam_role: str
+            region: str
+            cluster_id: str
+            host: str 
+            port: str 
+            db_name: str
+    """
+    session_helper = None
+
+    if redshift_params:
+        logger.debug("Found redshift parameters. Checking validity of params...")
+        check_redshift_params(redshift_params)
+        logger.debug("Redshift parameters valid. Opening Session helper.")
+        session_helper = SessionHelper(
+            region = redshift_params['region'],
+            cluster_id = redshift_params['cluster'],
+            host = redshift_params['host'],
+            port = redshift_params['port'],
+            db_name = redshift_params['db_name']
+        )
+        session_helper.configure_session_helper()
+        publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+        logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
+
+        df_types = _get_dataframe_datatypes(dataframe, partitions)
+        partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
+        publish_redshift.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
+        logger.debug(f"Table {redshift_params['table_name']} created.")
+
     logger.info("Checking params...")
     check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
-    check_partitions(partitions, dataframe)
+    check_partitions(partitions, dataframe) 
     logger.info("Params valid.")
     logger.debug("Begin writing to S3..")
 
@@ -182,7 +236,11 @@ def publish(bucket: str, key: str, partitions: iter, dataframe: pd.DataFrame) ->
         published_files = _assign_partition_meta(bucket=bucket,
                                                  key=key,
                                                  dataframe=dataframe,
-                                                 partitions=partitions)
+                                                 partitions=partitions,
+                                                 session_helper=session_helper, 
+                                                 redshift_params=redshift_params)
         files = files + published_files
+
     logger.debug("Done writing to S3.")
+
     return files

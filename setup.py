@@ -2,14 +2,15 @@ from setuptools import setup, find_packages
 from os import path
 
 package_name = "s3parq"
-package_version = "2.0.0"
+package_version = "2.1.0"
 description = "Write and read/query s3 parquet data using Athena/Spectrum/Hive style partitioning."
 cur_directory = path.abspath(path.dirname(__file__))
 with open(path.join(cur_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
+
 def get_reqs():
-    reqs=[]
+    reqs = []
     with open("requirements.txt") as file:
         for line in file:
             # remove linebreak which is the last character of the string
@@ -32,7 +33,7 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7"
         ],
-    packages= find_packages(exclude=("tests",)),
+    packages=find_packages(exclude=("tests",)),
     include_package_data=True,
     install_requires=get_reqs()
     )
