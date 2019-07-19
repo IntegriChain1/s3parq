@@ -134,10 +134,12 @@ def _datatype_mapper(columns: dict) -> dict:
             dtypes[col] = 'VARCHAR'
         elif dtype.startswith('int'):
             dtypes[col] = 'INTEGER'
-        elif dtype.startswith('float'):
-            dtypes[col] = 'REAL'
+        elif dtype.startswith('float32'):
+            dtypes[col] = 'FLOAT'
+        elif dtype.startswith('float64'):
+            dtypes[col] = 'DOUBLE'
         elif dtype.startswith('date'):
-            dtypes[col] = 'TIMESTAMP'
+            dtypes[col] = 'DATE'
         elif dtype.startswith('category'):
             dtypes[col] = 'VARCHAR'
         elif dtype == 'bool':
