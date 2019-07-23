@@ -57,7 +57,8 @@ def check_redshift_params(redshift_params: dict):
             raise ValueError(params_type_message)
     for param in expected_params:
         if param not in redshift_params.keys():
-            raise KeyError(f"Error: Required parameter {param} not found in passed redshift_params.")
+            params_key_message = f"Error: Required parameter {param} not found in passed redshift_params."
+            raise KeyError(params_key_message)
         
 
     logger.debug('Done checking redshift params')
