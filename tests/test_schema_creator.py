@@ -39,5 +39,4 @@ class Test():
             mock_scope.execute.assert_called_once_with(f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
                 FROM DATA CATALOG \
                 database '{db_name}' \
-                iam_role '{iam_role}' \
-                CREATE EXTERNAL DATABASE IF NOT EXISTS;")
+                iam_role '{iam_role}';")

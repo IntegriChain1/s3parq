@@ -27,7 +27,7 @@ class Test():
         columns = {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
         partitions = {'fish': 'object'}
         
-        expected_sql = f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {columns} \
+        expected_sql = f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} {columns} \
             PARTITIONED BY {partitions} STORED AS PARQUET \
             LOCATION "{path}";'
         with mock_session_helper.db_session_scope() as mock_scope:
@@ -48,7 +48,7 @@ class Test():
         columns = {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
         partitions = {}
         
-        expected_sql = f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {columns} \
+        expected_sql = f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} {columns} \
             STORED AS PARQUET \
             LOCATION "{path}";'
         with mock_session_helper.db_session_scope() as mock_scope:
@@ -59,7 +59,7 @@ class Test():
     #Test to check that the passed in datatype maps correctly
     def test_datatype_mapper(self):
         columns = {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
-        expected = {'grouped_col': 'VARCHAR', 'text_col': 'VARCHAR', 'int_col': 'INTEGER', 'float_col': 'REAL'}
+        expected = {'grouped_col': 'VARCHAR', 'text_col': 'VARCHAR', 'int_col': 'BIGINT', 'float_col': 'FLOAT'}
         sql = ""
         for key, val in expected.items():
             sql += f'{key} {val}, '

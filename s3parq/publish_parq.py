@@ -44,17 +44,22 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
             raise ValueError(partition_message)
     logger.debug("Done checking partitions.")
 
-
-def check_redshift_params(redshift_params: list):
+def check_redshift_params(redshift_params: dict):
+    expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name"]
     logger.debug("Checking redshift params are correctly formatted")
     number_redshift_params = 8
     if len(redshift_params) != number_redshift_params:
         params_length_message = f"Expected parameters: {number_redshift_params}. Received: {len(redshift_params)}"
         raise ValueError(params_length_message)
-    for item in redshift_params:
-        if type(item) != str:
-            params_type_message = f"Expected type: String. Received: {type(item)}"
+    for key, item in redshift_params.items():
+        if not item:
+            params_type_message = f"No value assigned for param {key}."
             raise ValueError(params_type_message)
+    for param in expected_params:
+        if param not in redshift_params.keys():
+            params_key_message = f"Error: Required parameter {param} not found in passed redshift_params."
+            raise KeyError(params_key_message)
+        
 
     logger.debug('Done checking redshift params')
 
@@ -66,7 +71,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
                        partitions: list) -> None:
     """ pushes the parquet dataset directly to s3. """
     logger.info("Writing to S3...")
-    table = pa.Table.from_pandas(dataframe, preserve_index=False)
+    table = pa.Table.from_pandas(df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
 
     uri = s3_url(bucket, key)
     logger.debug(f"Writing to s3 location: {uri}...")
@@ -113,13 +118,45 @@ def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=F
         types[col] = type_string
     return types
 
+def _parquet_schema(dataframe: pd.DataFrame)->pa.Schema:
+    """returns a parquet schema corresponding to a passed pandas dataframe. This schema is used for the construction of
+        a parquet Table from pandas."""
+
+    fields = []
+    for col, dtype in dataframe.dtypes.items():
+        dtype = dtype.name
+        if dtype == 'object':
+            pa_type = pa.string()
+        elif dtype.startswith('int32'):
+            pa_type = pa.int32()
+        elif dtype.startswith('int64'):
+            pa_type = pa.int64()
+        elif dtype.startswith('float32'):
+            pa_type = pa.float32()
+        elif dtype.startswith('float64'):
+            pa_type = pa.float64()
+        elif dtype.startswith('datetime'):
+            pa_type = pa.timestamp('s')
+        elif dtype.startswith('date'):
+            pa_type = pa.date64()
+        elif dtype.startswith('category'):
+            pa_type = pa.string()
+        elif dtype == 'bool':
+            pa_type = pa.bool_()
+        else:
+            raise NotImplementedError(f"Error: {dtype} is not a datatype which can be mapped to Parquet using s3parq.")
+        fields.append(pa.field(col, pa_type))
+
+    return pa.schema(fields=fields)
+        
+
 def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
     """ Returns a dict with the column names as keys, the data types (in strings) as values."""
     logger.debug("Determining write metadata for publish...")
     dataframe = dataframe[partitions]
     dtypes = {}
     for col, dtype in dataframe.dtypes.items():
-        dtype = str(dtype)
+        dtype = dtype.name
         if dtype == 'object':
             dtypes[col] = 'string'
         elif dtype.startswith('int'):
@@ -200,12 +237,15 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
     session_helper = None
 
     if redshift_params:
+        if "index" in dataframe.columns:
+            raise ValueError("'index' is a reserved keyword in Redshift. Please remove or rename your DataFrame's 'index' column.")
+
         logger.debug("Found redshift parameters. Checking validity of params...")
         check_redshift_params(redshift_params)
         logger.debug("Redshift parameters valid. Opening Session helper.")
         session_helper = SessionHelper(
             region = redshift_params['region'],
-            cluster_id = redshift_params['cluster'],
+            cluster_id = redshift_params['cluster_id'],
             host = redshift_params['host'],
             port = redshift_params['port'],
             db_name = redshift_params['db_name']
