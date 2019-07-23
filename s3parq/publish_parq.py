@@ -238,7 +238,7 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
         logger.debug("Redshift parameters valid. Opening Session helper.")
         session_helper = SessionHelper(
             region = redshift_params['region'],
-            cluster_id = redshift_params['cluster'],
+            cluster_id = redshift_params['cluster_id'],
             host = redshift_params['host'],
             port = redshift_params['port'],
             db_name = redshift_params['db_name']
