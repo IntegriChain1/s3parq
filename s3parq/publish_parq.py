@@ -44,17 +44,21 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
             raise ValueError(partition_message)
     logger.debug("Done checking partitions.")
 
-
-def check_redshift_params(redshift_params: list):
+def check_redshift_params(redshift_params: dict):
+    expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name"]
     logger.debug("Checking redshift params are correctly formatted")
     number_redshift_params = 8
     if len(redshift_params) != number_redshift_params:
         params_length_message = f"Expected parameters: {number_redshift_params}. Received: {len(redshift_params)}"
         raise ValueError(params_length_message)
-    for item in redshift_params:
+    for item in redshift_params.values():
         if type(item) != str:
             params_type_message = f"Expected type: String. Received: {type(item)}"
             raise ValueError(params_type_message)
+    for param in expected_params:
+        if param not in redshift_params.keys():
+            raise KeyError(f"Error: Required parameter {param} not found in passed redshift_params.")
+        
 
     logger.debug('Done checking redshift params')
 
