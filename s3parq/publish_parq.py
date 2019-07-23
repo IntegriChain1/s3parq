@@ -135,6 +135,8 @@ def _parquet_schema(dataframe: pd.DataFrame)->pa.Schema:
             pa_type = pa.float32()
         elif dtype.startswith('float64'):
             pa_type = pa.float64()
+        elif dtype.startswith('datetime'):
+            pa_type = pa.timestamp('s')
         elif dtype.startswith('date'):
             pa_type = pa.date64()
         elif dtype.startswith('category'):
@@ -142,7 +144,7 @@ def _parquet_schema(dataframe: pd.DataFrame)->pa.Schema:
         elif dtype == 'bool':
             pa_type = pa.bool_()
         else:
-            raise ValueError(f"Error: {dtype} is not a datatype which can be mapped to Parquet.")
+            raise NotImplementedError(f"Error: {dtype} is not a datatype which can be mapped to Parquet using s3parq.")
         fields.append(pa.field(col, pa_type))
 
     return pa.schema(fields=fields)

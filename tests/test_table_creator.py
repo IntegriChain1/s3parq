@@ -59,7 +59,7 @@ class Test():
     #Test to check that the passed in datatype maps correctly
     def test_datatype_mapper(self):
         columns = {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
-        expected = {'grouped_col': 'VARCHAR', 'text_col': 'VARCHAR', 'int_col': 'INTEGER', 'float_col': 'REAL'}
+        expected = {'grouped_col': 'VARCHAR', 'text_col': 'VARCHAR', 'int_col': 'BIGINT', 'float_col': 'FLOAT'}
         sql = ""
         for key, val in expected.items():
             sql += f'{key} {val}, '

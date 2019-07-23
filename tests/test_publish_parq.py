@@ -45,7 +45,7 @@ class Test:
             'table_name': 'hamburger_table',
             'iam_role': 'hamburger_arn',
             'region': 'us-east-1',
-            'cluster': 'hamburger_cluster',
+            'cluster_id': 'hamburger_cluster',
             'host': 'hamburger_host',
             'port': '9999',
             'db_name': 'hamburger_db'
@@ -148,7 +148,7 @@ class Test:
         redshift_params = self.setup_redshift_params()
         msh = mock_session_helper(
             region = redshift_params['region'],
-            cluster_id = redshift_params['cluster'],
+            cluster_id = redshift_params['cluster_id'],
             host = redshift_params['host'],
             port = redshift_params['port'],
             db_name = redshift_params['db_name']
@@ -169,7 +169,7 @@ class Test:
         redshift_params = self.setup_redshift_params()
         msh = mock_session_helper(
             region = redshift_params['region'],
-            cluster_id = redshift_params['cluster'],
+            cluster_id = redshift_params['cluster_id'],
             host = redshift_params['host'],
             port = redshift_params['port'],
             db_name = redshift_params['db_name']
