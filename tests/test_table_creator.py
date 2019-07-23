@@ -27,7 +27,7 @@ class Test():
         columns = {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
         partitions = {'fish': 'object'}
         
-        expected_sql = f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {columns} \
+        expected_sql = f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} {columns} \
             PARTITIONED BY {partitions} STORED AS PARQUET \
             LOCATION "{path}";'
         with mock_session_helper.db_session_scope() as mock_scope:
@@ -48,7 +48,7 @@ class Test():
         columns = {'grouped_col': 'object', 'text_col': 'object', 'int_col': 'int64', 'float_col': 'float64'}
         partitions = {}
         
-        expected_sql = f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {columns} \
+        expected_sql = f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} {columns} \
             STORED AS PARQUET \
             LOCATION "{path}";'
         with mock_session_helper.db_session_scope() as mock_scope:

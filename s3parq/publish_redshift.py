@@ -159,8 +159,7 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
         new_schema_query = f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
                 FROM DATA CATALOG \
                 database '{db_name}' \
-                iam_role '{iam_role}' \
-                CREATE EXTERNAL DATABASE IF NOT EXISTS;"
+                iam_role '{iam_role}';"
 
         logger.info(f'Running query to create schema: {new_schema_query}')
         scope.execute(new_schema_query)
@@ -180,6 +179,10 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
     redshift_columns = _datatype_mapper(columns)
     redshift_partitions = _datatype_mapper(partitions)
     with session_helper.db_session_scope() as scope:
+        if_exists_query = f'SELECT EXISTS(SELECT schemaname, tablename FROM SVV_EXTERNAL_TABLES WHERE tablename=\'{table_name}\' AND schemaname=\'{schema_name}\');'
+        table_exists = scope.execute(if_exists_query).first()[0]
+        if table_exists: return
+
         if not partitions:
             new_schema_query = (
                 f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
@@ -222,7 +225,7 @@ def create_partitions(bucket: str, schema: str, table: str, filepath: str, sessi
 
     with session_helper.db_session_scope() as scope:
         partitions_query = f"ALTER TABLE {schema}.{table} \
-            ADD PARTITION ({', '.join(formatted_partitions)}) \
+            ADD IF NOT EXISTS PARTITION ({', '.join(formatted_partitions)}) \
             LOCATION 's3://{bucket}/{path_to_data}';"
         logger.info(f'Running query to create: {partitions_query}')
         scope.execute(partitions_query)    
