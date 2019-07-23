@@ -51,9 +51,9 @@ def check_redshift_params(redshift_params: dict):
     if len(redshift_params) != number_redshift_params:
         params_length_message = f"Expected parameters: {number_redshift_params}. Received: {len(redshift_params)}"
         raise ValueError(params_length_message)
-    for item in redshift_params.values():
-        if type(item) != str:
-            params_type_message = f"Expected type: String. Received: {type(item)}"
+    for key, item in redshift_params.items():
+        if not item:
+            params_type_message = f"No value assigned for param {key}."
             raise ValueError(params_type_message)
     for param in expected_params:
         if param not in redshift_params.keys():
