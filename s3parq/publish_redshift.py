@@ -132,14 +132,16 @@ def _datatype_mapper(columns: dict) -> dict:
     for col, dtype in columns.items():
         if dtype == 'object':
             dtypes[col] = 'VARCHAR'
-        elif dtype.startswith('int'):
+        elif dtype.startswith('int32'):
             dtypes[col] = 'INTEGER'
+        elif dtype.startswith('int64'):
+            dtypes[col] = 'BIGINT'
         elif dtype.startswith('float32'):
-            dtypes[col] = 'FLOAT'
+            dtypes[col] = 'REAL'
         elif dtype.startswith('float64'):
-            dtypes[col] = 'DOUBLE'
+            dtypes[col] = 'FLOAT'
         elif dtype.startswith('date'):
-            dtypes[col] = 'DATE'
+            dtypes[col] = 'TIMESTAMP'
         elif dtype.startswith('category'):
             dtypes[col] = 'VARCHAR'
         elif dtype == 'bool':
@@ -150,7 +152,8 @@ def _datatype_mapper(columns: dict) -> dict:
     return f"({sql_statement[:-2]})" # Slice off the last space and comma
 
 def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper):
-    """Creates a schema in AWS redshift using a given iam_role. The schema is named schema_name and belongs to the (existing) Redshift db db_name."""
+    """Creates a schema in AWS redshift using a given iam_role. The schema is named schema_name and belongs to the (existing) Redshift db db_name.
+        iam_role is a link to an existing AWS IAM Role with Redshift Spectrum write permissions."""
     _redshift_name_validator(schema_name, db_name)
     with session_helper.db_session_scope() as scope:
         new_schema_query = f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
@@ -163,7 +166,16 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
         scope.execute(new_schema_query)
 
 def create_table(table_name: str, schema_name: str, columns: dict, partitions: dict, path: str, session_helper: SessionHelper):
-    """Creates a table in AWS redshift. The table will be named schema_name and belong to the (existing) Redshift db db_name."""
+    """
+    Creates a table in AWS redshift. The table will be named schema_name.table_name and belong to the (existing) Redshift db db_name.
+    Args:
+        table_name: name of created table. NOTE: THIS WILL ERROR IF table_name ALREADY EXISTS IN REDSHIFT
+        schema_name: name of schema in redshift. Schema must be external and already exist!
+        columns: Dictionary with keys corresponding to column names and values corresponding to pandas dtypes, excluding partition columns.
+        partitions: Dict similar to columns, except ONLY with partition columns
+        path: Path to published contract in s3 (excluding partitions)
+        session_helper: Instance of Redshift s3parq.session_helper
+    """
     _redshift_name_validator(table_name)
     redshift_columns = _datatype_mapper(columns)
     redshift_partitions = _datatype_mapper(partitions)
