@@ -231,7 +231,7 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
 
     if redshift_params:
         if "index" in dataframe.columns:
-            raise ValueError("'index' is a reserved keyword in pyarrow. Please remove or rename your DataFrame's 'index' column.")
+            raise ValueError("'index' is a reserved keyword in Redshift. Please remove or rename your DataFrame's 'index' column.")
 
         logger.debug("Found redshift parameters. Checking validity of params...")
         check_redshift_params(redshift_params)
