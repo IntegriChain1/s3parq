@@ -196,7 +196,7 @@ def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
     # 60MB compressed is ideal for Spectrum
     ideal_size = compression_ratio * (60 * float(1 << 20))
     # short circut if < ideal size
-    batch_log_message = """row size estimate: {row_size_est} bytes.
+    batch_log_message = f"""row size estimate: {row_size_est} bytes.
 number of rows: {num_rows} rows
 frame size estimate: {frame_size_est} bytes
 compression ratio: {compression_ratio}:1
@@ -216,7 +216,12 @@ ideal size: {ideal_size} bytes
         if index + 1 == num_partitions:
             upper = num_rows
         else:
-            upper = lower + rows_per_partition
+            if lower == 0:
+                upper = lower + rows_per_partition + 1
+            else:
+                upper = lower + rows_per_partition
+        
+        logger.debug(f"Appending dataframe chunk : df[{lower}:{upper}]")
         sized_frames.append(dataframe[lower:upper])
     logger.info(f"sized out {len(sized_frames)} dataframes.")
     return tuple(sized_frames)
@@ -270,12 +275,12 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
     for frame in _sized_dataframes(dataframe):
         _gen_parquet_to_s3(bucket=bucket,
                            key=key,
-                           dataframe=dataframe,
+                           dataframe=frame,
                            partitions=partitions)
 
         published_files = _assign_partition_meta(bucket=bucket,
                                                  key=key,
-                                                 dataframe=dataframe,
+                                                 dataframe=frame,
                                                  partitions=partitions,
                                                  session_helper=session_helper, 
                                                  redshift_params=redshift_params)
