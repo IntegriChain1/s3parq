@@ -136,7 +136,7 @@ def _parquet_schema(dataframe: pd.DataFrame)->pa.Schema:
         elif dtype.startswith('float64'):
             pa_type = pa.float64()
         elif dtype.startswith('datetime'):
-            pa_type = pa.timestamp('s')
+            pa_type = pa.timestamp('ns')
         elif dtype.startswith('date'):
             pa_type = pa.date64()
         elif dtype.startswith('category'):
