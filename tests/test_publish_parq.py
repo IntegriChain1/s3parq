@@ -139,7 +139,7 @@ class Test:
         parq.publish(bucket=bucket, key=key,
                         dataframe=dataframe, partitions=partitions)
 
-    @patch('s3parq.publish_redshift.create_schema')
+    @patch('s3parq.publish_spectrum.create_schema')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_schema_publish(self, mock_session_helper, mock_create_schema):
         columns, dataframe = self.setup_df()
@@ -160,7 +160,7 @@ class Test:
 
         mock_create_schema.assert_called_once_with(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
 
-    @patch('s3parq.publish_redshift.create_table')
+    @patch('s3parq.publish_spectrum.create_table')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_table_publish(self, mock_session_helper, mock_create_table):
         columns, dataframe = self.setup_df()

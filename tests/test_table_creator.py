@@ -1,6 +1,6 @@
 import pytest
 from mock import patch
-import s3parq.publish_redshift as rs
+import s3parq.publish_spectrum as rs
 from s3parq.session_helper import SessionHelper
 
 class MockScopeObj():
@@ -14,7 +14,7 @@ def scope_execute_mock(mock_session_helper):
 class Test():
 
     # Test that the function is called with the table name
-    @patch('s3parq.publish_redshift.SessionHelper')
+    @patch('s3parq.publish_spectrum.SessionHelper')
     @patch('tests.test_table_creator.scope_execute_mock')
     def test_create_table(self, mock_session_helper, mock_execute):
 
@@ -35,7 +35,7 @@ class Test():
             assert mock_scope.execute.called_once_with(expected_sql)
     
     # Test that the function is called with the table name without partitions
-    @patch('s3parq.publish_redshift.SessionHelper')
+    @patch('s3parq.publish_spectrum.SessionHelper')
     @patch('tests.test_table_creator.scope_execute_mock')
     def test_create_table_without_partitions(self, mock_session_helper, mock_execute):
 

@@ -1,5 +1,5 @@
 import pytest
-from s3parq import publish_redshift as rs
+from s3parq import publish_spectrum as rs
 
 
 def test_naming_validator():

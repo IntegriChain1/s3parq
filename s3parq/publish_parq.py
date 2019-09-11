@@ -4,7 +4,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from typing import List
 from s3parq.session_helper import SessionHelper
-from s3parq import publish_redshift
+from s3parq import publish_spectrum
 from sqlalchemy import Column, Integer, String
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 if not 'partition_data_types' in head_obj['Metadata']:
                     all_files_without_meta.append(obj['Key'])
                     if redshift_params and partitions:
-                        sql_command = publish_redshift.create_partitions(bucket, redshift_params['schema_name'], redshift_params['table_name'], obj['Key'], session_helper)
+                        sql_command = publish_spectrum.create_partitions(bucket, redshift_params['schema_name'], redshift_params['table_name'], obj['Key'], session_helper)
 
     for obj in all_files_without_meta:
         logger.debug(f"Appending metadata to file {obj}..")
@@ -256,12 +256,12 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
             db_name = redshift_params['db_name']
         )
         session_helper.configure_session_helper()
-        publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+        publish_spectrum.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
         logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
 
         df_types = _get_dataframe_datatypes(dataframe, partitions)
         partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
-        publish_redshift.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
+        publish_spectrum.create_table(redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
         logger.debug(f"Table {redshift_params['table_name']} created.")
 
     logger.info("Checking params...")

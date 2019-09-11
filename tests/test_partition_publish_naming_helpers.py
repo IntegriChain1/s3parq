@@ -1,5 +1,5 @@
 import pytest
-import s3parq.publish_redshift as parq
+import s3parq.publish_spectrum as parq
 from mock import patch
 
 class MockScopeObj():
