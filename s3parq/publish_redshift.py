@@ -1,4 +1,5 @@
 from s3parq.session_helper import SessionHelper
+import s3parq.publish_spectrum as spectrum
 from sqlalchemy import Column, Integer, String
 import logging, re
 import pandas as pd
@@ -161,24 +162,38 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
         logger.info(f'Running query to create schema: {new_schema_query}')
         scope.execute(new_schema_query)
 
-def create_table(table_name: str, schema_name: str, columns: dict, partitions: dict, path: str, session_helper: SessionHelper):
+def create_table(table_name: str, schema_name: str, columns: dict, partitions: dict, path: str, session_helper: SessionHelper, truncate=True):
     """
     Creates a table in AWS redshift. The table will be named schema_name.table_name and belong to the (existing) Redshift db db_name.
     Args:
-        table_name: name of created table. NOTE: THIS WILL ERROR IF table_name ALREADY EXISTS IN REDSHIFT
+        table_name: name of created table.
         schema_name: name of schema in redshift. Schema must be external and already exist!
         columns: Dictionary with keys corresponding to column names and values corresponding to pandas dtypes, excluding partition columns.
         partitions: Dict similar to columns, except ONLY with partition columns
         path: Path to published contract in s3 (excluding partitions)
         session_helper: Instance of Redshift s3parq.session_helper
+    After the table is created, it is truncated (to remove existing records) before being populated with data from 
     """
     _redshift_name_validator(table_name)
+    table = f"{schema_name}.{table_name}"
     redshift_columns = _datatype_mapper(columns)
     redshift_partitions = _datatype_mapper(partitions)
+    create_table_query = f"CREATE TABLE IF NOT EXISTS {table} {redshift_columns}"
+    truncate_query = f"TRUNCATE TABLE {table};"
+    copy_query = f"COPY {table} FROM {s3_path} IAM_ROLE {iam_role} FORMAT AS PARQUET;"
+
     with session_helper.db_session_scope() as scope:
-        new_table_query = f"CREATE TABLE IF NOT EXISTS {table_name}{redshift_columns}"
-        logger.info(f'Running query to create table: {new_table_query}')
-        scope.execute(new_table_query)
+        logger.info(f'Running query to create table: {create_table_query}')
+        scope.execute(create_table_query)
+        logger.info('Table created successfully.')
+        if truncate:
+            logger.info(f"Running query to truncate table: {truncate_query}")
+            scope.execute(truncate_query)
+            logger.info(f"Table truncated successfully.")
+        logger.info(f"Running query to copy data from S3 to table: {copy_query}")
+        scope.execute(copy_query)
+        logger.info(f"Data successfully copied from {s3_path} to {table}.")
+    return
 
 def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> str:
     '''
