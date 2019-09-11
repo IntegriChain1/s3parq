@@ -156,10 +156,7 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
         iam_role is a link to an existing AWS IAM Role with Redshift Spectrum write permissions."""
     _redshift_name_validator(schema_name, db_name)
     with session_helper.db_session_scope() as scope:
-        new_schema_query = f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
-                FROM DATA CATALOG \
-                database '{db_name}' \
-                iam_role '{iam_role}';"
+        new_schema_query = f"CREATE SCHEMA IF NOT EXISTS {schema_name} "
 
         logger.info(f'Running query to create schema: {new_schema_query}')
         scope.execute(new_schema_query)
@@ -179,24 +176,9 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
     redshift_columns = _datatype_mapper(columns)
     redshift_partitions = _datatype_mapper(partitions)
     with session_helper.db_session_scope() as scope:
-        if_exists_query = f'SELECT EXISTS(SELECT schemaname, tablename FROM SVV_EXTERNAL_TABLES WHERE tablename=\'{table_name}\' AND schemaname=\'{schema_name}\');'
-        table_exists = scope.execute(if_exists_query).first()[0]
-        if table_exists: return
-
-        if not partitions:
-            new_schema_query = (
-                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
-                STORED AS PARQUET \
-                LOCATION \'{path}\';'
-            )
-        else:
-            new_schema_query = (
-                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
-                PARTITIONED BY {redshift_partitions} STORED AS PARQUET \
-                LOCATION \'{path}\';'
-            )
-        logger.info(f'Running query to create table: {new_schema_query}')
-        scope.execute(new_schema_query)
+        new_table_query = f"CREATE TABLE IF NOT EXISTS {table_name}{redshift_columns}"
+        logger.info(f'Running query to create table: {new_table_query}')
+        scope.execute(new_table_query)
 
 def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> str:
     '''
