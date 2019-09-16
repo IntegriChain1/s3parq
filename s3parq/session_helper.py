@@ -3,8 +3,9 @@ import urllib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
+import urllib
+import urllib.request
 import logging
-
 
 class SessionHelper:
     '''
@@ -16,20 +17,34 @@ class SessionHelper:
     SH.configure_session_helper()
     '''
 
-    def __init__(self, region: str, cluster_id: str, host: str, port: str, db_name: str):
+    def __init__(self, region: str, cluster_id: str, host: str, port: str, db_name: str, ec2_user: str):
         self.region = region
         self.cluster_id = cluster_id
         self.host = host
         self.port = port
         self.db_name = db_name
+        self.ec2_user = ec2_user
+
+    def _is_ec2(self):
+        ''' Determine if the session is running on an ec2 server.'''
+        try:
+            # Timeout set to 2 seconds to avoid prolonged hang if the url cannot be reached
+            self.instance_id = urllib.request.urlopen('http://169.254.169.254/latest/meta-data/instance-id',timeout=2).read().decode()
+            return True
+        except urllib.error.URLError:
+            return False
 
     def set_boto_session(self):
         self.boto_session = boto3.Session(region_name=self.region)
 
     def set_iam_user(self):
-        iam_client = self.boto_session.client('iam')
-        iam_user = iam_client.get_user()
-        self.iam_user = iam_user['User']['UserName']
+        if self._is_ec2():
+            # On ec2, the cluster user is set from the redshift configuration dictionary
+            self.iam_user = self.ec2_user
+        else:
+            iam_client = self.boto_session.client('iam')
+            iam_user = iam_client.get_user()
+            self.iam_user = iam_user['User']['UserName']
 
     def set_aws_credentials(self, session):
         credentials = session.get_credentials()
@@ -42,17 +57,26 @@ class SessionHelper:
         self.Session = sessionmaker(bind=self.engine)
 
     def get_redshift_credentials(self):
-        client = self.boto_session.client(
-            'redshift',
-            region_name=self.region,
-            aws_access_key_id=self.aws_credentials.access_key,
-            aws_secret_access_key=self.aws_credentials.secret_key
-        )
-        temp_redshift_credentials = client.get_cluster_credentials(
-            DbUser=self.iam_user,
-            ClusterIdentifier=self.cluster_id,
-            AutoCreate=True,
-        )
+        if self._is_ec2():
+            client = self.boto_session.client('redshift', region_name=self.region)
+            
+            temp_redshift_credentials = client.get_cluster_credentials(
+                DbUser=self.iam_user,
+                ClusterIdentifier=self.cluster_id,
+                AutoCreate=True,
+            )
+        else:
+            client = self.boto_session.client(
+                'redshift',
+                region_name=self.region,
+                aws_access_key_id=self.aws_credentials.access_key,
+                aws_secret_access_key=self.aws_credentials.secret_key
+            )
+            temp_redshift_credentials = client.get_cluster_credentials(
+                DbUser=self.iam_user,
+                ClusterIdentifier=self.cluster_id,
+                AutoCreate=True,
+            )
         return temp_redshift_credentials
 
     def parse_temp_redshift_credentials(self, rs_creds):
