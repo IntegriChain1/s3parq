@@ -17,7 +17,7 @@ class SessionHelper:
     SH.configure_session_helper()
     '''
 
-    def __init__(self, region: str, cluster_id: str, host: str, port: str, db_name: str, ec2_user: None):
+    def __init__(self, region: str, cluster_id: str, host: str, port: str, db_name: str, ec2_user):
         self.region = region
         self.cluster_id = cluster_id
         self.host = host
