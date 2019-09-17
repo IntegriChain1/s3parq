@@ -45,14 +45,13 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
     logger.debug("Done checking partitions.")
 
 def check_redshift_params(redshift_params: dict):
-    expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name"]
+    expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name", "ec2_user"]
     logger.debug("Checking redshift params are correctly formatted")
-    number_redshift_params = 8
-    if len(redshift_params) != number_redshift_params:
-        params_length_message = f"Expected parameters: {number_redshift_params}. Received: {len(redshift_params)}"
+    if len(redshift_params) != len(expected_params):
+        params_length_message = f"Expected parameters: {len(expected_params)}. Received: {len(redshift_params)}"
         raise ValueError(params_length_message)
     for key, item in redshift_params.items():
-        if not item:
+        if not item and key != "ec2_user":
             params_type_message = f"No value assigned for param {key}."
             raise ValueError(params_type_message)
     for param in expected_params:
@@ -253,7 +252,8 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
             cluster_id = redshift_params['cluster_id'],
             host = redshift_params['host'],
             port = redshift_params['port'],
-            db_name = redshift_params['db_name']
+            db_name = redshift_params['db_name'],
+            ec2_user = redshift_params['ec2_user']
         )
         session_helper.configure_session_helper()
         publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
