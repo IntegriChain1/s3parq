@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 from os import path
 
 package_name = "s3parq"
-package_version = "2.1.3"
+package_version = "2.1.4"
 description = "Write and read/query s3 parquet data using Athena/Spectrum/Hive style partitioning."
 cur_directory = path.abspath(path.dirname(__file__))
 with open(path.join(cur_directory, 'README.md'), encoding='utf-8') as f:
