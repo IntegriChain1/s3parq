@@ -48,7 +48,8 @@ class Test:
             'cluster_id': 'hamburger_cluster',
             'host': 'hamburger_host',
             'port': '9999',
-            'db_name': 'hamburger_db'
+            'db_name': 'hamburger_db',
+            'ec2_user': 'hamburger_aws'
         }
 
         return redshift_params

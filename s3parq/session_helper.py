@@ -17,13 +17,14 @@ class SessionHelper:
     SH.configure_session_helper()
     '''
 
-    def __init__(self, region: str, cluster_id: str, host: str, port: str, db_name: str, ec2_user: str):
+    def __init__(self, region: str, cluster_id: str, host: str, port: str, db_name: str, ec2_user: None):
         self.region = region
         self.cluster_id = cluster_id
         self.host = host
         self.port = port
         self.db_name = db_name
         self.ec2_user = ec2_user
+        self.is_ec2_flag = self._is_ec2()
 
     def _is_ec2(self):
         ''' Determine if the session is running on an ec2 server.'''
@@ -38,7 +39,7 @@ class SessionHelper:
         self.boto_session = boto3.Session(region_name=self.region)
 
     def set_iam_user(self):
-        if self._is_ec2():
+        if self.is_ec2_flag:
             # On ec2, the cluster user is set from the redshift configuration dictionary
             self.iam_user = self.ec2_user
         else:
@@ -57,7 +58,7 @@ class SessionHelper:
         self.Session = sessionmaker(bind=self.engine)
 
     def get_redshift_credentials(self):
-        if self._is_ec2():
+        if self.is_ec2_flag:
             client = self.boto_session.client('redshift', region_name=self.region)
             
             temp_redshift_credentials = client.get_cluster_credentials(

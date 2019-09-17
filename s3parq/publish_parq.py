@@ -47,9 +47,8 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
 def check_redshift_params(redshift_params: dict):
     expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name", "ec2_user"]
     logger.debug("Checking redshift params are correctly formatted")
-    number_redshift_params = 9
-    if len(redshift_params) != number_redshift_params:
-        params_length_message = f"Expected parameters: {number_redshift_params}. Received: {len(redshift_params)}"
+    if len(redshift_params) != len(expected_params):
+        params_length_message = f"Expected parameters: {len(expected_params)}. Received: {len(redshift_params)}"
         raise ValueError(params_length_message)
     for key, item in redshift_params.items():
         if not item and key != "ec2_user":
