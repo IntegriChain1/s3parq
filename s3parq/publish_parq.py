@@ -75,7 +75,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     uri = s3_url(bucket, key)
     logger.debug(f"Writing to s3 location: {uri}...")
     pq.write_to_dataset(table, compression="snappy", root_path=uri,
-                        partition_cols=partitions, filesystem=s3fs.S3FileSystem())
+                        partition_cols=partitions, filesystem=s3fs.S3FileSystem(), coerce_timestamps='ms', allow_truncated_timestamps=True)
     logger.debug("Done writing to location.")
 
 
