@@ -7,7 +7,7 @@ This is an AWS-specific solution intended to serve as an interface between pytho
 1. writing data from pandas dataframes to s3 as partitioned parquet.
 2. reading data from s3 partitioned parquet *that was created by s3parq* to pandas dataframes.
 
-*NOTE:* s3parq writes (and reads) metadata into the s3 objects that is used to filter records _before_ any file i/o; this makes selecting datasets faster, but also means you need to have written data with s3parq to read it with s3parq. 
+*NOTE:* s3parq writes (and reads) metadata into the s3 objects that are used to filter records _before_ any file i/o; this makes selecting datasets faster, but also means you need to have written data with s3parq to read it with s3parq. 
 
 *TLDR - to read with s3parq, you need to have written with s3parq* 
  
