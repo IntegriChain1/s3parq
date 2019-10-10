@@ -44,7 +44,7 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
             raise ValueError(partition_message)
     logger.debug("Done checking partitions.")
 
-def check_redshift_params(redshift_params: dict):
+def check_redshift_params(redshift_params: dict)->:
     expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name", "ec2_user"]
     logger.debug("Checking redshift params are correctly formatted")
     if len(redshift_params) != len(expected_params):
@@ -255,6 +255,12 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
             db_name = redshift_params['db_name'],
             ec2_user = redshift_params['ec2_user']
         )
+
+        # Ensure redshift table name is lowercase
+        if redshift_params['table_name'] != redshift_params['table_name'].lower():
+            logger.warning(f"Table name {redshift_params['table_name']} contains uppercase letters. Converting to lowercase...")
+            redshift_params['table_name'] = redshift_params['table_name'].lower()
+    
         session_helper.configure_session_helper()
         publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
         logger.debug(f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
