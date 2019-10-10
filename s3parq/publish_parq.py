@@ -44,7 +44,7 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
             raise ValueError(partition_message)
     logger.debug("Done checking partitions.")
 
-def check_redshift_params(redshift_params: dict)->:
+def check_redshift_params(redshift_params: dict):
     expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name", "ec2_user"]
     logger.debug("Checking redshift params are correctly formatted")
     if len(redshift_params) != len(expected_params):
