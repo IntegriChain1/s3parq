@@ -44,7 +44,7 @@ def check_partitions(partitions: iter, dataframe: pd.DataFrame)->None:
             raise ValueError(partition_message)
     logger.debug("Done checking partitions.")
 
-def check_redshift_params(redshift_params: dict):
+def validate_redshift_params(redshift_params: dict) -> dict:
     expected_params = ["schema_name", "table_name", "iam_role", "region", "cluster_id", "host", "port", "db_name", "ec2_user"]
     logger.debug("Checking redshift params are correctly formatted")
     if len(redshift_params) != len(expected_params):
@@ -58,9 +58,19 @@ def check_redshift_params(redshift_params: dict):
         if param not in redshift_params.keys():
             params_key_message = f"Error: Required parameter {param} not found in passed redshift_params."
             raise KeyError(params_key_message)
-        
 
-    logger.debug('Done checking redshift params')
+     # Ensure redshift table name is lowercase
+    if redshift_params['table_name'] != redshift_params['table_name'].lower():
+        logger.warning(f"Table name {redshift_params['table_name']} contains uppercase letters. Converting to lowercase...")
+        redshift_params['table_name'] = redshift_params['table_name'].lower()
+
+    # Ensure redshift schema name is lowercase
+    if redshift_params['schema_name'] != redshift_params['schema_name'].lower():
+        logger.warning(f"Schema name {redshift_params['schema_name']} contains uppercase letters. Converting to lowercase...")
+        redshift_params['schema_name'] = redshift_params['schema_name'].lower()
+        
+    logger.debug('Done validating redshift params')
+    return redshift_params
 
 
 def s3_url(bucket: str, key: str):
@@ -245,7 +255,7 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
             raise ValueError("'index' is a reserved keyword in Redshift. Please remove or rename your DataFrame's 'index' column.")
 
         logger.debug("Found redshift parameters. Checking validity of params...")
-        check_redshift_params(redshift_params)
+        redshift_params = validate_redshift_params(redshift_params)
         logger.debug("Redshift parameters valid. Opening Session helper.")
         session_helper = SessionHelper(
             region = redshift_params['region'],
@@ -255,11 +265,6 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
             db_name = redshift_params['db_name'],
             ec2_user = redshift_params['ec2_user']
         )
-
-        # Ensure redshift table name is lowercase
-        if redshift_params['table_name'] != redshift_params['table_name'].lower():
-            logger.warning(f"Table name {redshift_params['table_name']} contains uppercase letters. Converting to lowercase...")
-            redshift_params['table_name'] = redshift_params['table_name'].lower()
     
         session_helper.configure_session_helper()
         publish_redshift.create_schema(redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)

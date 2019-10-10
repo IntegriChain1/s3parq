@@ -198,3 +198,16 @@ class Test:
         columns, dataframe = self.setup_df()
         partitions = ["text_col", "int_col", "float_col"]
         assert parq._get_dataframe_datatypes(dataframe, partitions) == {'grouped_col': 'object'}
+
+    # Test to ensure that redshift parameter validation checks and addresses table name caseing
+    def test_validate_redshift_params_table_case(self):
+        redshift_params = self.setup_redshift_params()
+        redshift_params['table_name'] = 'hAMbURgeR_tAbLE'
+        assert parq.validate_redshift_params(redshift_params)['table_name'] == 'hamburger_table'
+
+    # Test to ensure that redshift parameter validation checks and addresses schema name caseing
+    def test_validate_redshift_params_schema_case(self):
+        redshift_params = self.setup_redshift_params()
+        redshift_params['schema_name'] = 'HAmbURger_sCHemA'
+        assert parq.validate_redshift_params(redshift_params)['schema_name'] == 'hamburger_schema'
+
