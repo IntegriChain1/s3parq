@@ -213,13 +213,15 @@ ideal size: {ideal_size} bytes
 """
     logger.debug(batch_log_message)
     if ideal_size > frame_size_est:
-        return tuple([dataframe])
+        yield {'lower':0,'upper':len(dataframe)}
+        return
 
     # math the number of estimated partitions
     sized_frames = []
     num_partitions = int(row_size_est * num_rows / ideal_size)
     rows_per_partition = int(num_rows / num_partitions)
     # for each partition do the thing
+    logger.info(f"Sized out {len(range(0, num_rows, rows_per_partition))} dataframes.")
     for index, lower in enumerate(range(0, num_rows, rows_per_partition)):
         lower = lower if lower == 0 else lower + 1
         if index + 1 == num_partitions:
@@ -229,11 +231,8 @@ ideal size: {ideal_size} bytes
                 upper = lower + rows_per_partition + 1
             else:
                 upper = lower + rows_per_partition
-        
-        logger.debug(f"Appending dataframe chunk : df[{lower}:{upper}]")
-        sized_frames.append(dataframe[lower:upper])
-    logger.info(f"sized out {len(sized_frames)} dataframes.")
-    return tuple(sized_frames)
+
+        yield {'lower':lower,'upper':upper}
 
 
 def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFrame, redshift_params = None) -> None:
@@ -283,7 +282,9 @@ def publish(bucket: str, key: str, partitions: List['str'], dataframe: pd.DataFr
     logger.debug("Begin writing to S3..")
 
     files = []
-    for frame in _sized_dataframes(dataframe):
+    for frame_params in _sized_dataframes(dataframe):
+        logger.info(f"Publishing dataframe chunk : {frame_params['lower']} to {frame_params['upper']}")
+        frame = pd.DataFrame(dataframe[frame_params['lower']:frame_params['upper']])
         _gen_parquet_to_s3(bucket=bucket,
                            key=key,
                            dataframe=frame,

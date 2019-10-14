@@ -98,7 +98,7 @@ class MockHelper:
             for file in files:
                 full_path = os.path.join(subdir, file)
                 keysub = subdir.split(os.path.sep)[
-                    subdir.split(os.path.sep).index('T')+1:]
+                    subdir.split(os.path.sep).index('tmp')+1:]
                 self._dataset = keysub[0]
                 keysub.append(file)
                 key = '/'.join(keysub)
