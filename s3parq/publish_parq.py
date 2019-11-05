@@ -224,7 +224,7 @@ ideal size: {ideal_size} bytes
     logger.info(f"Sized out {len(range(0, num_rows, rows_per_partition))} dataframes.")
     for index, lower in enumerate(range(0, num_rows, rows_per_partition)):
         lower = lower if lower == 0 else lower + 1
-        if index + 1 == num_partitions:
+        if index == num_partitions:
             upper = num_rows
         else:
             if lower == 0:
