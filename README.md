@@ -89,6 +89,7 @@ Dataframes published to S3 can optionally be queried in AWS Redshift Spectrum. T
 - host: URL to the cluster specified in cluster_id
 - port: port to connect to Redshift (usually 5439)
 - db_name: name of the (existing) external database configured to use Redshift Spectrum
+- ec2_user: user to use if running on EC2, otherwise send as a blank string
 
 If redshift_params is present but invalid, the entire `publish()` fails.
 
@@ -96,6 +97,8 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 
 ## Gotchas
 - Filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
+
+- Metadata in AWS has a limit - we use a S3 object's Metadata attribute to store partition datatypes, hopefully you aren't trying to partition on so many columns that you hit it!
 
 - When using `get_diff_partition_values` remembering which set you want can be confusing. You can refer to these diagrams: 
 ![venn diagram of reverse value](./assets/s3parq_get_diff_partition_values.png)
