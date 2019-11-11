@@ -66,7 +66,7 @@ def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
 
 
 def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_diff: iter, reverse: bool = False) -> iter:
-     """ Returns all the partition values in the dataset at the bucket/key 
+     """ Returns all the partition values in the dataset at the bucket/key
      that are not in values_to_diff
 
     Args:
@@ -75,7 +75,7 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
         partition (str): The partition in the dataset to parse the values out of
         values_to_diff (iter): The iterable set of values to compare the partition values to
         reverse (bool, Optional): Determines if the operation should be inversed,
-            if True it will look for the values in values_to_diff that are not 
+            if True it will look for the values in values_to_diff that are not
             in the partition values (basically backwards). Defaults to False
 
     Returns:
@@ -470,7 +470,7 @@ def _get_filtered_key_list(typed_parts: dict, filters: List[type(Filter)], key: 
     return filter_keys[0]
 
 
-def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, parallel: bool =True) -> pd.DataFrame:
+def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, parallel: bool = True) -> pd.DataFrame:
     """ Gets the data based on the filtered object key list. Concatenates all 
     the separate parquet files.
 
