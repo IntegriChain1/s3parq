@@ -3,13 +3,18 @@ import re
 
 class S3NamingHelper:
 
-    def validate_part(self, value, allow_prefix: bool = True) -> tuple:
-        '''checks if a valid s3 part
-            ARGS:
-                - value (str) the path or partial path in s3
-                - allow_prefix (bool) if false will only validate single parts
-            RETURNS: tuple validation and reason value
-        '''
+    def validate_part(self, value: str, allow_prefix: bool = True) -> tuple:
+        """ Checks if value is valid in an S3 key
+
+        Args:
+            value (str): The S3 path part to validate
+            allow_prefix (bool, Optional): Indicates whether this path part 
+                includes multiple "folders" to it
+
+        Returns:
+            A tuple, of which the first index being False means it is invalid
+                and a second index will contain the message as to why
+        """
         if not allow_prefix and '/' in value:
             return tuple([False, 'prefix dissalowed'])
         if len(value) < 1:
@@ -25,7 +30,18 @@ class S3NamingHelper:
 
         return tuple([True, None])
 
-    def validate_bucket_name(self, bucket_name: str):
+    def validate_bucket_name(self, bucket_name: str) -> bool:
+        """ Checks if value is valid as an S3 bucket name
+
+        Args:
+            bucket_name (str): The S3 bucket name to validate
+
+        Returns:
+            A bool, which should always be True if no error was thrown
+
+        Raises:
+            ValueError: If the bucket name was invalid, with a message as to why
+        """
         result, message = self._validate_bucket_name(bucket_name)
         if result:
             return result
@@ -72,11 +88,15 @@ class S3NamingHelper:
             return tuple([True, None])
 
     def validate_s3_path(self, path: str) -> tuple:
-        ''' INTENT: validate a complete s3 path
-            ARGS:
-                - path (str) the S3 path to validate
-            RETURNS: tuple validation and reason value
-        '''
+        """ Checks if value is valid as a complete S3 path/URI
+
+        Args:
+            path (str): The S3 URI to validate
+
+        Returns:
+            A tuple, of which the first index being False means it is invalid
+                and a second index will contain the message as to why
+        """
         if path[:5] != 's3://':
             return tuple([False, 'bucket path must have arn prefix (s3://)'])
 
@@ -95,6 +115,7 @@ class S3NamingHelper:
         return tuple([True, path])
 
     def _safe_chars(self) -> list:
+        """ Returns a list of all characters safe for use in S3 """
         safe = list(range(ord('a'), ord('z')+1))
         safe += list(range(ord('A'), ord('Z')+1))
         safe = [chr(x) for x in safe]
