@@ -229,7 +229,7 @@ def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, compar
             smaller datasets run much quicker without parallel
 
     Returns:
-        An dataframe of all values in the input but not the comparison,
+        A dataframe of all values in the input but not the comparison,
             if reverse=True then vice-versa
     """
     S3NamingHelper().validate_bucket_name(input_bucket)
