@@ -1,25 +1,29 @@
 import boto3
-import moto
-import s3parq
-import pytest
 import dfmock
-from s3parq.publish_parq import publish
-from s3parq.fetch_parq import fetch
+import moto
 import pandas as pd
+from pandas.util.testing import assert_frame_equal
+import pytest
+
+from s3parq.fetch_parq import fetch
+from s3parq.publish_parq import publish
+from s3parq.testing_helper import df_equal_by_set
 
 
 @moto.mock_s3
 def test_end_to_end():
-    df = dfmock.DFMock(count=1000)
+    df = dfmock.DFMock(count=100000)
     df.columns = {"string_options": {"option_count": 4, "option_type": "string"},
-                "int_options": {"option_count": 4, "option_type": "int"},
-                "datetime_options": {"option_count": 5, "option_type": "datetime"},
-                "float_options": {"option_count": 2, "option_type": "float"},
-                "metrics": "integer"
-                }
+                  "int_options": {"option_count": 4, "option_type": "int"},
+                  "datetime_options": {"option_count": 5, "option_type": "datetime"},
+                  "float_options": {"option_count": 2, "option_type": "float"},
+                  "metrics": "integer"
+                  }
+
     df.generate_dataframe()
-    df.grow_dataframe_to_size(250)
-    
+    # This is unfortunately big, but getting it to force a partition doesn't work otherwise
+    df.grow_dataframe_to_size(500)
+
     s3_client = boto3.client('s3')
 
     bucket_name = 'thistestbucket'
@@ -27,11 +31,12 @@ def test_end_to_end():
 
     s3_client.create_bucket(Bucket=bucket_name)
 
+    old_df = pd.DataFrame(df.dataframe)
     # pub it
     publish(
         bucket=bucket_name,
         key=key,
-        dataframe=df.dataframe,
+        dataframe=old_df,
         partitions=['string_options', 'datetime_options', 'float_options']
     )
 
@@ -42,7 +47,14 @@ def test_end_to_end():
         parallel=False
     )
 
-    assert fetched_df.shape == df.dataframe.shape
-    pd.DataFrame.eq(fetched_df, df.dataframe)
-    fetched_df.head()
-
+    assert fetched_df.shape == old_df.shape
+    assert df_equal_by_set(fetched_df, old_df, old_df.columns)
+    # make the column order match
+    fetched_df = fetched_df[old_df.columns]
+    # make them the same format, remerging partitions changes it all around
+    fetched_df = fetched_df.sort_values(
+        by=old_df.columns.tolist()).reset_index(drop=True)
+    old_df = old_df.sort_values(
+        by=old_df.columns.tolist()).reset_index(drop=True)
+    # The setup on this part is a pain but it's the most specific check
+    assert_frame_equal(fetched_df, old_df)
