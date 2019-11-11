@@ -25,10 +25,8 @@ def test_end_to_end():
     df.grow_dataframe_to_size(500)
 
     s3_client = boto3.client('s3')
-
     bucket_name = 'thistestbucket'
     key = 'thisdataset'
-
     s3_client.create_bucket(Bucket=bucket_name)
 
     old_df = pd.DataFrame(df.dataframe)
