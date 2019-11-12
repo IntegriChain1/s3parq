@@ -1,4 +1,5 @@
 import boto3
+from contextlib import ExitStack
 from dfmock import DFMock
 import logging
 import moto
@@ -144,12 +145,12 @@ def setup_grouped_dataframe(count: int = 100, columns: Dict = None):
     return df.dataframe
 
 
-@moto.mock_s3
 def setup_partitioned_parquet(
     dataframe: pd.DataFrame = None,
     bucket: str = None,
     key: str = None,
-    partition_data_types: Dict = None
+    partition_data_types: Dict = None,
+    s3_client=None
 ):
     """ Creates temporary files and publishes them to the mocked S3 to test fetches,
     will fill in unsupplied parameters with random values or defaults
@@ -162,6 +163,9 @@ def setup_partitioned_parquet(
             string if not supplied
         partition_data_types (Dict, Optional): partition columns and datatypes,
             will be the default if not supplied
+        s3_client (boto3 S3 client, Optional): The started S3 client that boto
+            uses - NOTE: this should be made under a moto S3 mock!
+            If it is not provided, a session is crafted under moto.mock_s3
 
     Returns:
         A tuple of the bucket and the published parquet file paths
@@ -172,7 +176,7 @@ def setup_partitioned_parquet(
         key = setup_random_string()
     if not bucket:
         bucket = setup_random_string()
-    if not partition_data_types:
+    if partition_data_types is None:
         partition_data_types = {
             "string_col": "string",
             "int_col": "integer",
@@ -181,22 +185,27 @@ def setup_partitioned_parquet(
             "datetime_col": "datetime"
         }
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with ExitStack() as stack:
+        tmp_dir = stack.enter_context(tempfile.TemporaryDirectory())
+        if not s3_client:
+            stack.enter_context(moto.mock_s3())
+            s3_client = boto3.client('s3')
 
-        s3_client = boto3.client('s3')
         s3_client.create_bucket(Bucket=bucket)
 
         # generate the local parquet tree
         table = pa.Table.from_pandas(dataframe)
         pq.write_to_dataset(table,
                             root_path=str(tmp_dir),
-                            partition_cols=list(partition_data_types.keys())
+                            partition_cols=list(
+                                partition_data_types.keys())
                             )
 
         parquet_paths = []
 
         # traverse the local parquet tree
-        extra_args = {'partition_data_types': str(partition_data_types)}
+        extra_args = {'partition_data_types': str(
+            partition_data_types)}
         for subdir, dirs, files in os.walk(str(tmp_dir)):
             for file in files:
                 full_path = os.path.join(subdir, file)
@@ -208,6 +217,7 @@ def setup_partitioned_parquet(
                     parquet_paths.append(full_key)
 
     return bucket, parquet_paths
+
 
 def setup_random_string(min_len: int = 0, max_len: int = 10):
     """ Create a random string of either given min_lento max_len or default 0 to 10 """
