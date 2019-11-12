@@ -213,9 +213,9 @@ def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, compar
 
 def convert_type(val: Any, dtype: str) -> Any:
     """ converts a value to the given datatype"""
-    if dtype == 'string':
+    if dtype == 'string' or dtype == 'str':
         return str(val)
-    elif dtype == 'integer':
+    elif dtype == 'integer' or dtype == 'int':
         return int(val)
     elif dtype == 'float':
         return float(val)
