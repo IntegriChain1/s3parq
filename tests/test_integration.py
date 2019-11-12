@@ -7,7 +7,7 @@ import pytest
 
 from s3parq.fetch_parq import fetch
 from s3parq.publish_parq import publish
-from s3parq.testing_helper import df_equal_by_set
+from s3parq.testing_helper import df_equal_by_set, sorted_dfs_equal_by_pandas_testing
 
 
 @moto.mock_s3
@@ -46,13 +46,5 @@ def test_end_to_end():
 
     assert fetched_df.shape == old_df.shape
     assert df_equal_by_set(fetched_df, old_df, old_df.columns)
-    # make the column order match
-    fetched_df = fetched_df[old_df.columns]
-    # make them the same format, remerging partitions changes it all around
-    fetched_df = fetched_df.sort_values(
-        by=old_df.columns.tolist()).reset_index(drop=True)
-    old_df = old_df.sort_values(
-        by=old_df.columns.tolist()).reset_index(drop=True)
-    # The setup on this part is a pain but it's the most specific check
-    assert_frame_equal(fetched_df, old_df)
+    sorted_dfs_equal_by_pandas_testing(fetched_df, old_df)
 
