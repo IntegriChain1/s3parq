@@ -36,7 +36,7 @@ def _redshift_name_validator(*args) -> None:
 
     Returns:
         None
-    
+
     Raises:
         ValueError: Uses internal validate_name function and raises error based
             on failure reasons
@@ -235,26 +235,28 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
         scope.execute(new_schema_query)
 
 
-def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> str:
-    '''
-    Generates partitioning SQL
+def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> None:
+    ''' Executes the SQL that creates partitions on the given table for an 
+    individual file
+
     Args:
         bucket (str): S3 bucket where data is stored
         schema (str): name of redshift schema (must already exist)
         table (str): name of table in schema.  Must have partitions scoped out in `CREATE TABLE ...`
         filepath (str): path to data in S3 that will be queryable by it's partitions
-    ----
+            NOTE: This is to the single parquet file, including the partitions
+        session_helper (SessionHelper): a configured s3parq.session_helper.SessionHelper session
+
     Returns:
-        query (str): a raw SQL string that adds the partitioned data to the table
-    --------
+        None
+
     Example:
         Args:
             bucket = 'MyBucket'
             schema = 'MySchema'
             table = 'MyTable'
             filepath = 'path/to/data/apple=abcd/banana=1234/abcd1234.parquet'
-        Returns:
-            "ALTER TABLE MySchema.MyTable               ADD PARTITION (apple='abcd' ,banana='1234')               LOCATION 's3://MyBucket/path/to/data/apple=abcd';"
+            session_helper = some_configured_session
     '''
     partitions = _get_partitions_for_spectrum(filepath)
     formatted_partitions = _format_partition_strings_for_sql(partitions)
