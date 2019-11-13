@@ -67,8 +67,8 @@ def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
 
 
 def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_diff: iter, reverse: bool = False) -> iter:
-     """ Returns all the partition values in the dataset at the bucket/key
-     that are not in values_to_diff
+    """ Returns all the partition values in the dataset at the bucket/key
+    that are not in values_to_diff
 
     Args:
         bucket (str): S3 Bucket name

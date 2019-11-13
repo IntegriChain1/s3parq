@@ -1,5 +1,5 @@
 import boto3
-from sqlalchemy import create_engine
+import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 import urllib
@@ -81,7 +81,7 @@ class SessionHelper:
             None
         """
         user, pwd = kwargs['user'], kwargs['pwd']
-        self.engine = create_engine(
+        self.engine = sqlalchemy.create_engine(
             f'postgresql://{user}:{pwd}@{self.host}:{self.port}/{self.db_name}', isolation_level="AUTOCOMMIT")
         self.Session = sessionmaker(bind=self.engine)
 
@@ -164,7 +164,7 @@ class SessionHelper:
             raise
 
     @contextmanager
-    def db_session_scope(self) -> sqlalchemy.Session:
+    def db_session_scope(self) -> sessionmaker:
         """ Wraps the sqlalchemy session so that it can used a try-except-finally
         to ensure there are rollbacks and that the session is always closed.
 
