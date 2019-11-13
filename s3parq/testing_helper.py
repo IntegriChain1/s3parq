@@ -138,6 +138,7 @@ def setup_grouped_dataframe(count: int = 100, columns: Dict = None):
                    "float_col": {"option_count": 3, "option_type": "float"},
                    "bool_col": {"option_count": 3, "option_type": "bool"},
                    "datetime_col": {"option_count": 3, "option_type": "datetime"},
+                   "text_col": "string",
                    "metrics": "int"
                    }
     df.columns = columns
