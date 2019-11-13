@@ -99,6 +99,51 @@ class Test():
                                           partitions, path, mock_session_helper)
             assert mock_scope.execute.called_once_with(expected_sql)
 
+    def test_gets_proper_partitions(self):
+        test_str = '/some/path/to/data/banana=33/orange=65/apple=abcd/xyz.parquet'
+        final_partitions = publish_redshift._get_partitions_for_spectrum(test_str)
+        assert final_partitions == ['banana=33', 'orange=65', 'apple=abcd']
+
+    def test_gets_no_partitions(self):
+        test_str = '/some/path/to/data/xyz.parquet'
+        final_partitions = publish_redshift._get_partitions_for_spectrum(test_str)
+        assert final_partitions == []
+
+    def test_gets_proper_partitions_multiple_slashes(self):
+        test_str = '/some/path/to/data//banana=33/orange=65/apple=abcd/xyz.parquet'
+        final_partitions = publish_redshift._get_partitions_for_spectrum(test_str)
+        assert final_partitions == ['banana=33', 'orange=65', 'apple=abcd']
+
+    def test_format_partition_strings(self):
+        test_partitions = ['banana=33', 'orange=65', 'apple=abcd']
+        final_partitions = publish_redshift._format_partition_strings_for_sql(test_partitions)
+        assert final_partitions == ["banana='33'", "orange='65'", "apple='abcd'"]
+
+    def test_format_partition_strings_no_partitions(self):
+        test_partitions = []
+        final_partitions = publish_redshift._format_partition_strings_for_sql(test_partitions)
+        assert final_partitions == []
+
+    def test_index_containing_substring(self):
+        test_list = ['abcd', 'efgh=1234', 'ijkl=5678', 'xyz.parquet']
+        index = publish_redshift._last_index_containing_substring(test_list, '=')
+        assert index == 2
+
+    def test_index_containing_substring_no_match(self):
+        test_list = ['abcd', 'efgh=1234', 'ijkl=5678']
+        index = publish_redshift._last_index_containing_substring(test_list, '&')
+        assert index == 4
+
+    def test_get_partition_location(self):
+        test_filepath = 'path/to/data/apple=abcd/orange=1234/abcd1234.parquet'
+        partition_path = publish_redshift._get_partition_location(test_filepath)
+        assert partition_path == 'path/to/data/apple=abcd/orange=1234'
+
+    def test_get_partition_location_no_partition(self):
+        test_filepath = 'path/to/data/abcd1234.parquet'
+        with pytest.raises(ValueError):
+            partition_path = publish_redshift._get_partition_location(test_filepath)
+
     # Test that the function is called with the table name without partitions
     @patch('s3parq.publish_redshift.SessionHelper')
     @patch('tests.test_publish_redshift.scope_execute_mock')
