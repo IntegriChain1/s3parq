@@ -80,6 +80,7 @@ def test_fetch_files_list():
     assert (test_files_keyed == fetched_files)
 
 # Test that all files matching key get listed out even with pagination
+@pytest.mark.slow
 @moto.mock_s3
 def test_fetch_files_list_more_than_1k():
     uploaded = setup_files_list(count=1500)

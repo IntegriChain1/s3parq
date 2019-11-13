@@ -10,6 +10,7 @@ from s3parq.publish_parq import publish
 from s3parq.testing_helper import df_equal_by_set, sorted_dfs_equal_by_pandas_testing
 
 
+@pytest.mark.slow
 @moto.mock_s3
 def test_end_to_end():
     df = dfmock.DFMock(count=100000)

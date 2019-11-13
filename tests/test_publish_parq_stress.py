@@ -6,6 +6,7 @@ import pytest
 import s3parq.publish_parq as pub_parq
 
 
+@pytest.mark.slow
 @mock_s3
 def test_parquet_sizes():
     """ Running two tests - this needs to work with and without partitions """
@@ -26,6 +27,7 @@ def test_parquet_sizes():
             assert float(obj['Size']) <= 61 * float(1 << 20)
 
 
+@pytest.mark.slow
 @mock_s3
 def test_parquet_sizes_with_partition():
     """ Running two tests - this needs to work with and without partitions """
