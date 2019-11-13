@@ -1,16 +1,19 @@
-import pytest
 from mock import patch
+import pytest
+
 from s3parq import publish_redshift
-from s3parq.session_helper import SessionHelper
+
 
 class MockScopeObj():
 
     def execute(self, schema_string: str):
         pass
 
+
 def scope_execute_mock(mock_session_helper):
     pass
-    
+
+
 class Test():
 
     # Given a correctly formatted string make sure output is correct SQL
@@ -19,9 +22,11 @@ class Test():
         schema_name_bad = "my string"
         database_name_good = 'my_database'
         database_name_bad = 'my database'
-        publish_redshift._redshift_name_validator(schema_name_good, database_name_good)
+        publish_redshift._redshift_name_validator(
+            schema_name_good, database_name_good)
         with pytest.raises(ValueError):
-            publish_redshift._redshift_name_validator(schema_name_bad, database_name_bad)
+            publish_redshift._redshift_name_validator(
+                schema_name_bad, database_name_bad)
 
     # Test that the function is called with the schema name
     @patch('s3parq.publish_redshift.SessionHelper')
@@ -33,9 +38,10 @@ class Test():
 
         schema_name = "my_string"
         db_name = "my_database"
-        iam_role = "my_iam_role"     
+        iam_role = "my_iam_role"
         with mock_session_helper.db_session_scope() as mock_scope:
-            publish_redshift.create_schema(schema_name, db_name, iam_role, mock_session_helper)
+            publish_redshift.create_schema(
+                schema_name, db_name, iam_role, mock_session_helper)
             mock_scope.execute.assert_called_once_with(f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
                 FROM DATA CATALOG \
                 database '{db_name}' \
