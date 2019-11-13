@@ -35,13 +35,16 @@ Setup-based helper functions:
 
 
 def df_equal_by_set(df1: pd.DataFrame, df2: pd.DataFrame, cols: iter) -> bool:
-    """ Checks whether two dataframes are equal set-by-set
+    """ This checks over whether 2 dataframes are equal by comparing zips of
+    the given columns
+
     Args:
-        df1 (pd.DataFrame): The first dataframe to compare
-        df2 (pd.DataFrame): The second dataframe to compare
-        cols (iter): The columns of the two dataframes to compare
+        df1 (pd.DataFrame): The first dataframe to compare against
+        df2 (pd.DataFrame): The second dataframe to compare against
+        cols (iter): The column to compare on the dataframes
+
     Returns:
-        bool of whether the given columns are equal across dataframes
+        bool of whether the dataframe columns are equal
     """
     set1, set2 = list(), list()
     for col in cols:
