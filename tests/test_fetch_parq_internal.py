@@ -341,15 +341,6 @@ def test_filter_to_none():
 
     assert filter_paths == fil_paths
 
-# TODO
-# # Test getting the file list for all paths
-# def test_get_all_file_lists():
-#     pass
-
-# # Test getting the file lists when there are no files
-# def test_get_all_file_lists_no_files():
-#     pass
-
 
 ''' Phase 3 tests:
 Refer to functionality of fetch_parq that:
@@ -425,6 +416,4 @@ def test_s3_partitioned_parquet_to_dataframe():
             bucket=bucket, key=path, partition_metadata=partition_types))
 
     assert full_response.shape == df.shape
-    print (full_response.dtypes)
-    print (df.dtypes)
     sorted_dfs_equal_by_pandas_testing(full_response, df)

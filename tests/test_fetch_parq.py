@@ -344,10 +344,6 @@ def test_fetches_diff():
         parallel=False
     )
 
-    print(fetched_diff)
-    print("hm")
-    print(test_df)
-
     assert fetched_diff.shape == test_df.shape
     sorted_dfs_equal_by_pandas_testing(fetched_diff, test_df)
 
