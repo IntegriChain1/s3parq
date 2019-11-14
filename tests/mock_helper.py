@@ -10,6 +10,8 @@ from string import ascii_lowercase
 import random
 import tempfile
 
+import warnings
+
 
 @mock_s3
 class MockHelper:
@@ -21,6 +23,10 @@ class MockHelper:
 
     def __init__(self, count=1000000, s3=False, files=False):
         """ If s3 then will populate the s3 bucket with partitioned parquet. """
+
+        warnings.warn("MockHelper is a mess and will be removed in s3parq version 2.20", 
+            DeprecationWarning)
+
         self._dataframe = self.setup_grouped_dataframe(count=count)
         self._s3_bucket = ''
         self._dataset = ''

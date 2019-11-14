@@ -2,6 +2,7 @@ import ast
 import boto3
 from collections import OrderedDict
 import datetime
+from distutils.util import strtobool
 import operator
 from typing import Dict, List, Any
 import multiprocessing as mp
@@ -66,8 +67,8 @@ def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
 
 
 def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_diff: iter, reverse: bool = False) -> iter:
-     """ Returns all the partition values in the dataset at the bucket/key
-     that are not in values_to_diff
+    """ Returns all the partition values in the dataset at the bucket/key
+    that are not in values_to_diff
 
     Args:
         bucket (str): S3 Bucket name
@@ -268,9 +269,9 @@ def convert_type(val: Any, dtype: str) -> Any:
     Returns:
         The value parsed into the new dtype
     """
-    if dtype == 'string':
+    if dtype == 'string' or dtype == 'str':
         return str(val)
-    elif dtype == 'integer':
+    elif dtype == 'integer' or dtype == 'int':
         return int(val)
     elif dtype == 'float':
         return float(val)
@@ -279,8 +280,8 @@ def convert_type(val: Any, dtype: str) -> Any:
             val, '%Y-%m-%d %H:%M:%S')
     elif dtype == 'category':
         return pd.Category(val)
-    elif dtype == 'bool':
-        return bool(val)
+    elif dtype == 'bool' or dtype == 'boolean':
+        return bool(strtobool(val))
 
 
 def dtype_to_pandas_dtype(dtype: str) -> str:
