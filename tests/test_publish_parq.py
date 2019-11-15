@@ -246,3 +246,32 @@ class Test:
 
         mock_create_table.assert_called_once_with(
             redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
+
+    @patch('s3parq.publish_redshift.create_table')
+    @patch('s3parq.publish_parq.SessionHelper')
+    def test_table_publish_mixed_type_column(self, mock_session_helper, mock_create_table):
+        dataframe = setup_grouped_dataframe()
+        bucket, key = self.setup_s3()
+        partitions = []
+        redshift_params = self.setup_redshift_params()
+        msh = mock_session_helper(
+            region=redshift_params['region'],
+            cluster_id=redshift_params['cluster_id'],
+            host=redshift_params['host'],
+            port=redshift_params['port'],
+            db_name=redshift_params['db_name']
+        )
+
+        msh.configure_session_helper()
+
+        dataframe.iat[5, dataframe.columns.get_loc("text_col")] = 45
+
+        parq.publish(bucket=bucket, key=key,
+                     dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
+
+        df_types = parq._get_dataframe_datatypes(dataframe, partitions)
+        partition_types = parq._get_dataframe_datatypes(
+            dataframe, partitions, True)
+
+        mock_create_table.assert_called_once_with(
+            redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
