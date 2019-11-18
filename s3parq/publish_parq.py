@@ -166,13 +166,30 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
         key (str): S3 key to the root of where the dataset should be published
         dataframe (pd.DataFrame): Dataframe that's being published
         partitions (list): List of partition columns
-        
+
     Returns:
         None
     """
     logger.info("Writing to S3...")
-    table = pa.Table.from_pandas(
-        df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
+
+    try:
+        table = pa.Table.from_pandas(
+            df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
+    except pa.lib.ArrowTypeError:
+        logger.warn(
+            "Dataframe conversion to pyarrow table failed, checking object columns for mixed types")
+        dataframe_dtypes = dataframe.dtypes.to_dict()
+        object_columns = [
+            col for col, col_type in dataframe_dtypes.items() if col_type == "object"]
+        for object_col in object_columns:
+            if not dataframe[object_col].apply(isinstance, args=[str]).all():
+                logger.warn(
+                    f"Dataframe column : {object_col} : in this chunk is type object but contains non-strings, converting to all-string column")
+                dataframe[object_col] = dataframe[object_col].astype(str)
+
+        logger.info("Retrying conversion to pyarrow table")
+        table = pa.Table.from_pandas(
+            df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
 
     uri = s3_url(bucket, key)
     logger.debug(f"Writing to s3 location: {uri}...")
@@ -205,7 +222,7 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 port (str): Redshift Spectrum port to use
                 db_name (str): Redshift Spectrum database name to use
                 ec2_user (str): If on ec2, the user that should be used
-        
+
     Returns:
         A str list of object keys of the objects that got metadata added
     """
@@ -242,7 +259,7 @@ def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=F
         partitions (list, Optional): List of partition columns
         use_parts (bool, Optional): bool to determine if only partition datatypes
             should be returned
-        
+
     Returns:
         Dictionary of the column names as keys and dtypes as values,
             if use_parts is true then only limited to partition columns
@@ -263,7 +280,7 @@ def _parquet_schema(dataframe: pd.DataFrame) -> pa.Schema:
 
     Args:
         dataframe (pd.DataFrame): Dataframe to pull the schema of
-        
+
     Returns:
         PyArrow Schema of the given dataframe
     """
@@ -302,7 +319,7 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dic
     Args:
         dataframe (pd.DataFrame): Dataframe to parse the types of
         partitions (list): Partitions in the dataframe to get the type of
-        
+
     Returns:
         Dictionary of column names as keys with their datatypes (string form) as values
     """
@@ -336,7 +353,7 @@ def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
 
     Args:
         dataframe (pd.DataFrame): Dataframe to size out
-        
+
     Yields:
         A dictionary containing the upper and lower index of the dataframe to chunk
     """
