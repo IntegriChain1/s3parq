@@ -54,7 +54,7 @@ def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
         An iterable of all the partition values
     """
 
-    all_files = _get_all_files_list(bucket, key)
+    all_files = get_all_files_list(bucket, key)
 
     if not all_files:
         return []
@@ -83,7 +83,7 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
         An iterable of all the partition values that are not in values_to_diff
             and vice-versa if reverse is True
     """
-    all_files = _get_all_files_list(bucket, key)
+    all_files = get_all_files_list(bucket, key)
 
     if not all_files:
         if reverse:
@@ -128,7 +128,7 @@ def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
     """
     S3NamingHelper().validate_bucket_name(bucket_name=bucket)
 
-    all_files = _get_all_files_list(bucket=bucket, key=key)
+    all_files = get_all_files_list(bucket=bucket, key=key)
 
     if not all_files:
         return None
@@ -174,7 +174,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     _validate_filter_rules(filters)
     S3NamingHelper().validate_bucket_name(bucket)
 
-    all_files = _get_all_files_list(bucket, key)
+    all_files = get_all_files_list(bucket, key)
 
     if not all_files:
         return pd.DataFrame()
@@ -303,6 +303,36 @@ def dtype_to_pandas_dtype(dtype: str) -> str:
     return dtype
 
 
+def get_all_files_list(bucket: str, key: str) -> list:
+    """ Get a list of all files to get all partitions values.
+    Necesarry to catch all partition values for non-filtered partiions.
+    NOTE: This paginates across as many as are matching keys in the bucket;
+        be mindful of any costs in extra large buckets without a specific key.
+
+    Args:
+        bucket (str): S3 bucket to search in
+        key (str): S3 key to the dataset to check
+
+    Returns:
+        A list of the keys of all objects in the bucket/key that end with .parquet
+    """
+    objects_in_bucket = []
+    s3_client = boto3.client('s3')
+    paginator = s3_client.get_paginator('list_objects')
+    operation_parameters = {'Bucket': bucket,
+                            'Prefix': key}
+    page_iterator = paginator.paginate(**operation_parameters)
+    for page in page_iterator:
+        if not "Contents" in page.keys():
+            break
+
+        for item in page['Contents']:
+            if item['Key'].endswith('.parquet'):
+                objects_in_bucket.append(item['Key'])
+
+    return objects_in_bucket
+
+
 def _get_partitions_and_types(first_file_key: str, bucket: str) -> dict:
     """ Fetch a list of all the partitions actually there and their 
     datatypes. List may be different than passed list if not being used
@@ -331,34 +361,6 @@ def _get_partitions_and_types(first_file_key: str, bucket: str) -> dict:
         first_file['Metadata']['partition_data_types'])
 
     return partition_metadata
-
-
-def _get_all_files_list(bucket: str, key: str) -> list:
-    """ Get a list of all files to get all partitions values.
-    Necesarry to catch all partition values for non-filtered partiions.
-
-    Args:
-        bucket (str): S3 bucket to search in
-        key (str): S3 key to the dataset to check
-
-    Returns:
-        A list of the keys of all objects in the bucket/key that end with .parquet
-    """
-    objects_in_bucket = []
-    s3_client = boto3.client('s3')
-    paginator = s3_client.get_paginator('list_objects')
-    operation_parameters = {'Bucket': bucket,
-                            'Prefix': key}
-    page_iterator = paginator.paginate(**operation_parameters)
-    for page in page_iterator:
-        if not "Contents" in page.keys():
-            break
-
-        for item in page['Contents']:
-            if item['Key'].endswith('.parquet'):
-                objects_in_bucket.append(item['Key'])
-
-    return objects_in_bucket
 
 
 def _parse_partitions_and_values(file_paths: List[str], key: str) -> dict:
