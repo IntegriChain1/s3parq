@@ -505,7 +505,7 @@ def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, 
             append_to_temp(_s3_parquet_to_dataframe(
                 bucket, path, partition_metadata))
 
-    return pd.concat(temp_frames)
+    return pd.concat(temp_frames, ignore_index=True)
 
 
 def _s3_parquet_to_dataframe(bucket: str, key: str, partition_metadata: dict) -> pd.DataFrame:
