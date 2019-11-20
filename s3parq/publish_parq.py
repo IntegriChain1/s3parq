@@ -471,11 +471,11 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
             redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, s3_url(bucket, key), session_helper)
         logger.debug(f"Table {redshift_params['table_name']} created.")
 
-    logger.info("Checking params...")
+    logger.debug("Checking publish params...")
     check_empty_dataframe(dataframe)
     check_dataframe_for_timedelta(dataframe)
     check_partitions(partitions, dataframe)
-    logger.info("Params valid.")
+    logger.debug("Publish params valid.")
     logger.debug("Begin writing to S3..")
 
     files = []
@@ -497,6 +497,6 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
                                                  redshift_params=redshift_params)
         files = files + published_files
 
-    logger.debug("Done writing to S3.")
+    logger.info("Done writing to S3.")
 
     return files

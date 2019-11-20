@@ -3,6 +3,7 @@ import boto3
 from collections import OrderedDict
 import datetime
 from distutils.util import strtobool
+import logging
 import operator
 from typing import Dict, List, Any
 import multiprocessing as mp
@@ -40,6 +41,9 @@ NON_NUM_TYPES = [
     "bool",
     "boolean"
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
@@ -177,6 +181,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     all_files = get_all_files_list(bucket, key)
 
     if not all_files:
+        logger.debug(f"No files present under : {key} :, returning empty DataFrame")
         return pd.DataFrame()
 
     partition_metadata = _get_partitions_and_types(all_files[0], bucket)
@@ -202,6 +207,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     # if there is no data matching the filters, return an empty DataFrame
     # with correct headers and type
     if len(files_to_load) < 1:
+        logger.debug(f"Dataset filters left no matching values, returning empty dataframe with matching headers")
         sacrifical_files = [all_files[0]]
         sacrifical_frame = _get_filtered_data(
             bucket=bucket, paths=sacrifical_files, partition_metadata=partition_metadata, parallel=parallel)
@@ -252,6 +258,8 @@ def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, compar
         "comparison": "==",
         "values": diff_values
     }]
+
+    logger.debug(f"Fetching difference, looking for values : {diff_values} : under partition : {partition} ")
 
     if reverse:
         return fetch(bucket=comparison_bucket, key=comparison_key, filters=filters, parallel=parallel)
@@ -416,10 +424,10 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict) -> dic
                 map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
         elif (part_type == 'bool') or (part_type == 'boolean'):
             parsed_parts[part] = set(map(bool, values))
+        else:
+            logger.debug(f"Unknown partition type : {part_type} :, leaving as a string")
 
     return parsed_parts
-
-# TODO: Neaten up?
 
 
 def _get_filtered_key_list(typed_parts: dict, filters: List[type(Filter)], key: str) -> List[str]:
@@ -498,12 +506,14 @@ def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, 
     if parallel:
         with get_context("spawn").Pool() as pool:
             for path in paths:
+                logger.debug(f"[Parallel] Fetching parquet file to append from : {path} ")
                 append_to_temp(
                     pool.apply_async(_s3_parquet_to_dataframe, args=(bucket, path, partition_metadata)).get())
             pool.close()
             pool.join()
     else:
         for path in paths:
+            logger.debug(f"Fetching parquet file to append from : {path} ")
             append_to_temp(_s3_parquet_to_dataframe(
                 bucket, path, partition_metadata))
 
