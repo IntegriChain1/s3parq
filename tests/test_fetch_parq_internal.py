@@ -9,7 +9,6 @@ import pytest
 import s3parq.fetch_parq as fetch_parq
 from s3parq.testing_helper import (
     sorted_dfs_equal_by_pandas_testing,
-    setup_files_list,
     setup_grouped_dataframe,
     setup_partitioned_parquet
 )
@@ -60,44 +59,6 @@ def test_filter_validation():
     for val_fil in valid_filters_list:
         fetch_parq._validate_filter_rules(val_fil)
 
-# Test that all files matching key gets listed out
-@moto.mock_s3
-def test_fetch_files_list():
-    uploaded = setup_files_list(count=100)
-
-    bucket = uploaded['bucket']
-    key = uploaded['key']
-    test_files = uploaded['files']
-
-    fetched_files = fetch_parq._get_all_files_list(bucket, key)
-
-    test_files_keyed = list(
-        map(lambda x: key + "/" + x + ".parquet", test_files))
-
-    test_files_keyed.sort()
-    fetched_files.sort()
-
-    assert (test_files_keyed == fetched_files)
-
-# Test that all files matching key get listed out even with pagination
-@pytest.mark.slow
-@moto.mock_s3
-def test_fetch_files_list_more_than_1k():
-    uploaded = setup_files_list(count=1500)
-
-    bucket = uploaded['bucket']
-    key = uploaded['key']
-    test_files = uploaded['files']
-
-    fetched_files = fetch_parq._get_all_files_list(bucket, key)
-
-    test_files_keyed = list(
-        map(lambda x: key + "/" + x + ".parquet", test_files))
-
-    test_files_keyed.sort()
-    fetched_files.sort()
-
-    assert (test_files_keyed == fetched_files)
 
 # Test that all valid partitions are correctly parsed
 

@@ -9,6 +9,7 @@ import random
 import s3parq.fetch_parq as fetch_parq
 from s3parq.testing_helper import (
     sorted_dfs_equal_by_pandas_testing,
+    setup_files_list,
     setup_grouped_dataframe,
     setup_partitioned_parquet,
     setup_random_string
@@ -145,9 +146,9 @@ def test_get_partition_difference_string():
     s3_paths = [
         f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
 
-    with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
         with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-            _get_all_files_list.return_value = s3_paths
+            get_all_files_list.return_value = s3_paths
             _get_partitions_and_types.return_value = {
                 "hamburger": "string"}
 
@@ -170,8 +171,8 @@ def test_get_partition_difference_string_when_none():
     rando_values.sort()
     s3_paths = []
 
-    with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
-        _get_all_files_list.return_value = []
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
+        get_all_files_list.return_value = []
 
         # values when theres no bucket data
         deltas = fetch_parq.get_diff_partition_values(
@@ -194,9 +195,9 @@ def test_get_partition_difference_int_when_none():
     rando_values.sort()
     s3_paths = []
 
-    with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
         with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-            _get_all_files_list.return_value = []
+            get_all_files_list.return_value = []
             _get_partitions_and_types.return_value = 777.09
 
             # values when there is no bucket data
@@ -221,9 +222,9 @@ def test_get_partition_difference_int_comparison_none():
     s3_paths = [
         f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
 
-    with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
         with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-            _get_all_files_list.return_value = s3_paths
+            get_all_files_list.return_value = s3_paths
             _get_partitions_and_types.return_value = {
                 "hamburger": "integer"}
 
@@ -249,9 +250,9 @@ def test_get_partition_difference_datetime():
     s3_paths = [
         f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values[:-1]]
 
-    with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
         with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-            _get_all_files_list.return_value = s3_paths
+            get_all_files_list.return_value = s3_paths
             _get_partitions_and_types.return_value = {
                 "burgertime": "datetime"}
 
@@ -276,9 +277,9 @@ def test_get_partition_values():
     s3_paths = [
         f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values]
 
-    with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
         with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-            _get_all_files_list.return_value = s3_paths
+            get_all_files_list.return_value = s3_paths
             _get_partitions_and_types.return_value = {
                 "burgertime": "datetime"}
 
@@ -414,3 +415,42 @@ def test_fetches_diff_none():
     )
 
     sorted_dfs_equal_by_pandas_testing(fetched_diff_reverse_both, input_df)
+
+# Test that all files matching key gets listed out
+@moto.mock_s3
+def test_fetch_files_list():
+    uploaded = setup_files_list(count=100)
+
+    bucket = uploaded['bucket']
+    key = uploaded['key']
+    test_files = uploaded['files']
+
+    fetched_files = fetch_parq.get_all_files_list(bucket, key)
+
+    test_files_keyed = list(
+        map(lambda x: key + "/" + x + ".parquet", test_files))
+
+    test_files_keyed.sort()
+    fetched_files.sort()
+
+    assert (test_files_keyed == fetched_files)
+
+# Test that all files matching key get listed out even with pagination
+@pytest.mark.slow
+@moto.mock_s3
+def test_fetch_files_list_more_than_1k():
+    uploaded = setup_files_list(count=1500)
+
+    bucket = uploaded['bucket']
+    key = uploaded['key']
+    test_files = uploaded['files']
+
+    fetched_files = fetch_parq.get_all_files_list(bucket, key)
+
+    test_files_keyed = list(
+        map(lambda x: key + "/" + x + ".parquet", test_files))
+
+    test_files_keyed.sort()
+    fetched_files.sort()
+
+    assert (test_files_keyed == fetched_files)
