@@ -159,11 +159,12 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
         key (str): S3 key that leads to the desired dataset
         filters (List(Filter), Optional): filters to be applied to the Dataset Partitions
             Filters have the fields:
-                partition (str):
+
+                - partition (str):
                     The published partition to be applied to
-                comparison (str):
+                - comparison (str):
                     Comparison function - one of: [ == , != , > , < , >= , <= ]
-                values (List(any)): 
+                - values (List(any)): 
                     Values to compare to - must match partition data type
                     May not use multiple values with the '<', '>' comparisons
         parallel (bool, Optional):

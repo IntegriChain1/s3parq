@@ -106,6 +106,11 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 ![venn diagram of reverse value](./assets/s3parq_get_diff_partition_values.png)
 ![table of difference values](./assets/s3parq_diff_table.png)
 
+## Changelog
+### 2.1.7
+- setup.py no longer requires all of our requirements.txt for developers, 
+but only crucial pieces with looser versioning
+
 ## Contribution
 We welcome pull requests!
 Some basic guidelines:
