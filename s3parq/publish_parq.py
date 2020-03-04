@@ -100,15 +100,16 @@ def validate_redshift_params(redshift_params: dict) -> dict:
         redshift_params (dict):
             Dictionary for Spectrum, should be provided in the following format
             The params should be formatted as follows:
-                schema_name (str): Name of the Spectrum schema to publish to
-                table_name (str): Name of the table to write the dataset as
-                iam_role (str): Role to take while writing data to Spectrum
-                region (str): AWS region for Spectrum
-                cluster_id (str): Spectrum cluster id
-                host (str): Redshift Spectrum host name
-                port (str): Redshift Spectrum port to use
-                db_name (str): Redshift Spectrum database name to use
-                ec2_user (str): If on ec2, the user that should be used
+
+                - schema_name (str): Name of the Spectrum schema to publish to
+                - table_name (str): Name of the table to write the dataset as
+                - iam_role (str): Role to take while writing data to Spectrum
+                - region (str): AWS region for Spectrum
+                - cluster_id (str): Spectrum cluster id
+                - host (str): Redshift Spectrum host name
+                - port (str): Redshift Spectrum port to use
+                - db_name (str): Redshift Spectrum database name to use
+                - ec2_user (str): If on ec2, the user that should be used
 
     Returns:
         The given redshift_params, with table and schema names lowercase
@@ -213,15 +214,16 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         redshift_params (dict, Optional):
             Dictionary for Spectrum, should be in the following format
             The params should be formatted as follows:
-                schema_name (str): Name of the Spectrum schema to publish to
-                table_name (str): Name of the table to write the dataset as
-                iam_role (str): Role to take while writing data to Spectrum
-                region (str): AWS region for Spectrum
-                cluster_id (str): Spectrum cluster id
-                host (str): Redshift Spectrum host name
-                port (str): Redshift Spectrum port to use
-                db_name (str): Redshift Spectrum database name to use
-                ec2_user (str): If on ec2, the user that should be used
+
+                - schema_name (str): Name of the Spectrum schema to publish to
+                - table_name (str): Name of the table to write the dataset as
+                - iam_role (str): Role to take while writing data to Spectrum
+                - region (str): AWS region for Spectrum
+                - cluster_id (str): Spectrum cluster id
+                - host (str): Redshift Spectrum host name
+                - port (str): Redshift Spectrum port to use
+                - db_name (str): Redshift Spectrum database name to use
+                - ec2_user (str): If on ec2, the user that should be used
 
     Returns:
         A str list of object keys of the objects that got metadata added
@@ -426,15 +428,16 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
             for data to be published to Spectrum. Leave out entirely to avoid
             publishing to Spectrum.
             The params should be formatted as follows:
-                schema_name (str): Name of the Spectrum schema to publish to
-                table_name (str): Name of the table to write the dataset as
-                iam_role (str): Role to take while writing data to Spectrum
-                region (str): AWS region for Spectrum
-                cluster_id (str): Spectrum cluster id
-                host (str): Redshift Spectrum host name
-                port (str): Redshift Spectrum port to use
-                db_name (str): Redshift Spectrum database name to use
-                ec2_user (str): If on ec2, the user that should be used
+
+                - schema_name (str): Name of the Spectrum schema to publish to
+                - table_name (str): Name of the table to write the dataset as
+                - iam_role (str): Role to take while writing data to Spectrum
+                - region (str): AWS region for Spectrum
+                - cluster_id (str): Spectrum cluster id
+                - host (str): Redshift Spectrum host name
+                - port (str): Redshift Spectrum port to use
+                - db_name (str): Redshift Spectrum database name to use
+                - ec2_user (str): If on ec2, the user that should be used
 
     Returns:
         A str list of all the newly published object keys
