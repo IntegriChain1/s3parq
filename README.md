@@ -98,6 +98,8 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 ## Gotchas
 - Filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
 
+- Dataframe index is _not_ preserved!
+
 - Metadata in AWS has a limit - we use a S3 object's Metadata attribute to store partition datatypes, hopefully you aren't trying to partition on so many columns that you hit it!
 
 - When using `get_diff_partition_values` remembering which set you want can be confusing. You can refer to these diagrams: 

@@ -2,21 +2,12 @@ from setuptools import setup, find_packages
 from os import path
 
 package_name = "s3parq"
-package_version = "2.1.4a"
+package_version = "2.1.4b"
 description = "Write and read/query s3 parquet data using Athena/Spectrum/Hive style partitioning."
 cur_directory = path.abspath(path.dirname(__file__))
 with open(path.join(cur_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-
-def get_reqs():
-    reqs = []
-    with open("requirements.txt") as file:
-        for line in file:
-            # remove linebreak which is the last character of the string
-            currentReq = line[:-1]
-            reqs.append(currentReq)
-    return reqs
 
 setup(
     name=package_name,
@@ -35,5 +26,12 @@ setup(
         ],
     packages=find_packages(exclude=("tests",)),
     include_package_data=True,
-    install_requires=get_reqs()
-    )
+    install_requires=[
+            "pandas>=0.24.2, <1",
+            "pyarrow>=0.13.0",
+            "boto3>=1.9",
+            "s3fs>=0.2",
+            "psycopg2==2.8.3",
+            "SQLAlchemy>=1.3"
+    ]
+)
