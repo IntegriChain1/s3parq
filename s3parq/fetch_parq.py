@@ -174,7 +174,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
         accept_not_s3parq (bool, Optional):
             Determines whether it will fetch dataframes that have not been published
                 with S3Parq and are thus lacking metadata. This does not support
-                partitioned parquet like this, only 
+                partitioned parquet.
 
     Returns:
         A pandas dataframe of the filtered results from S3
