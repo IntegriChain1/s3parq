@@ -149,7 +149,7 @@ def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
     return max([convert_type(val, partition_dtype) for val in partition_values])
 
 
-def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: bool = True) -> pd.DataFrame:
+def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: bool = True, accept_not_s3parq: bool = True) -> pd.DataFrame:
     """ S3 Parquet to Dataframe Fetcher.
     This function handles the portion of work that will return a concatenated 
     dataframe based on the partition filters of the specified dataset.
@@ -171,6 +171,10 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
             Determines if multiprocessing should be used, defaults to True
             Whether this is more or less efficient is dataset dependent,
                 smaller datasets run much quicker without parallel
+        accept_not_s3parq (bool, Optional):
+            Determines whether it will fetch dataframes that have not been published
+                with S3Parq and are thus lacking metadata. This does not support
+                partitioned parquet.
 
     Returns:
         A pandas dataframe of the filtered results from S3
@@ -186,6 +190,14 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
         return pd.DataFrame()
 
     partition_metadata = _get_partitions_and_types(all_files[0], bucket)
+
+    if partition_metadata is None:
+        if accept_not_s3parq:
+            logger.info("Parquet files do not have S3Parq metadata, fetching anyways.")
+            return _get_filtered_data(bucket=bucket, paths=all_files, partition_metadata={},
+                              parallel=parallel)
+        else:
+            raise MissingS3ParqMetadata("Parquet files are missing s3parq metadata, enable 'accept_not_s3parq' if you'd like this to pass.")
 
     _validate_matching_filter_data_type(partition_metadata, filters)
 
@@ -358,7 +370,6 @@ def _get_partitions_and_types(first_file_key: str, bucket: str) -> dict:
         The parsed metadata from heading the first file
     TODO
     """
-    parts_and_types = []
     s3_client = boto3.client('s3')
 
     first_file = s3_client.head_object(
@@ -366,8 +377,13 @@ def _get_partitions_and_types(first_file_key: str, bucket: str) -> dict:
         Key=first_file_key
     )
 
-    partition_metadata = ast.literal_eval(
-        first_file['Metadata']['partition_data_types'])
+    metadata = first_file['Metadata']
+    partition_metadata_raw = metadata.get("partition_data_types", None)
+
+    if partition_metadata_raw is None:
+        return None
+
+    partition_metadata = ast.literal_eval(partition_metadata_raw)
 
     return partition_metadata
 
@@ -536,9 +552,12 @@ def _s3_parquet_to_dataframe(bucket: str, key: str, partition_metadata: dict) ->
     uri = f"{bucket}/{key}"
     table = pq.ParquetDataset(uri, filesystem=s3)
     frame = table.read_pandas().to_pandas()
-    partitions = _repopulate_partitions(uri, partition_metadata)
-    for k, v in partitions.items():
-        frame[k] = v
+
+    if partition_metadata != {}:
+        partitions = _repopulate_partitions(uri, partition_metadata)
+        for k, v in partitions.items():
+            frame[k] = v
+
     return frame
 
 
@@ -559,8 +578,10 @@ def _repopulate_partitions(partition_string: str, partition_metadata: dict) -> t
             k, v = string.split('=')
             partitions[k] = v
 
-    for key, val in partitions.items():
-        partitions[key] = convert_type(val, partition_metadata[key])
+    if partition_metadata:
+        for key, val in partitions.items():
+            partitions[key] = convert_type(val, partition_metadata[key])
+    
     return partitions
 
 
@@ -622,3 +643,12 @@ def _validate_matching_filter_data_type(part_types, filters: List[type(Filter)])
             if fil_part in NON_NUM_TYPES:
                 raise ValueError(
                     f"Comparison {f['comparison']} cannot be used on partition types of {fil_part}")
+
+
+# Custom error for catching
+class MissingS3ParqMetadata(Exception):
+    """ This class is meant to be an Exception thrown only when parquet files
+    being fetched are not S3Parq compatible and the option to fetch anyways is
+    disabled.
+    """
+    pass

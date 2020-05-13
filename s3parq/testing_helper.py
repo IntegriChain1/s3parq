@@ -223,6 +223,62 @@ def setup_partitioned_parquet(
     return bucket, parquet_paths
 
 
+def setup_nons3parq_parquet(
+    dataframe: pd.DataFrame = None,
+    bucket: str = None,
+    key: str = None,
+    s3_client=None
+):
+    """ Creates temporary files and publishes them to the mocked S3 to test fetches,
+    will fill in unsupplied parameters with random values or defaults
+
+    Args:
+        dataframe (pd.DataFrame): dataframe to split into parquet files
+        bucket (str, Optional): bucket to create to put parquet files in,
+            will be a random string if not supplied
+        key (str, Optional): S3 key to put parquet files in, will be a random
+            string if not supplied
+        s3_client (boto3 S3 client, Optional): The started S3 client that boto
+            uses - NOTE: this should be made under a moto S3 mock!
+            If it is not provided, a session is crafted under moto.mock_s3
+
+    Returns:
+        A tuple of the bucket and the published parquet file paths
+    """
+    if dataframe is None:
+        dataframe = setup_grouped_dataframe()
+    if not key:
+        key = setup_random_string()
+    if not bucket:
+        bucket = setup_random_string()
+
+    with ExitStack() as stack:
+        tmp_dir = stack.enter_context(tempfile.TemporaryDirectory())
+        if not s3_client:
+            stack.enter_context(moto.mock_s3())
+            s3_client = boto3.client('s3')
+
+        s3_client.create_bucket(Bucket=bucket)
+
+        # generate the local parquet tree
+        table = pa.Table.from_pandas(dataframe)
+        pq.write_to_dataset(table,root_path=str(tmp_dir), partition_cols=[])
+
+        parquet_paths = []
+
+        # traverse the local parquet tree
+        for subdir, dirs, files in os.walk(str(tmp_dir)):
+            for file in files:
+                full_path = os.path.join(subdir, file)
+                full_key = '/'.join([key,
+                                     subdir.replace(f"{tmp_dir}/", ''), file])
+                with open(full_path, 'rb') as data:
+                    s3_client.upload_fileobj(data, Bucket=bucket, Key=full_key)
+                    parquet_paths.append(full_key)
+
+    return bucket, parquet_paths
+
+
 def setup_random_string(min_len: int = 0, max_len: int = 10):
     """ Create a random string of either given min_lento max_len or default 0 to 10 """
     return ''.join([random.choice(ascii_lowercase) for x in range(min_len, max_len)])

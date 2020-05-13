@@ -7,7 +7,7 @@ This is an AWS-specific solution intended to serve as an interface between pytho
 1. writing data from pandas dataframes to s3 as partitioned parquet.
 2. reading data from s3 partitioned parquet *that was created by s3parq* to pandas dataframes.
 
-*NOTE:* s3parq writes (and reads) metadata into the s3 objects that is used to filter records _before_ any file i/o; this makes selecting datasets faster, but also means you need to have written data with s3parq to read it with s3parq. 
+*NOTE:* s3parq writes (and reads) metadata into the s3 objects that is used to filter records _before_ any file i/o; this makes selecting datasets faster, but also means you need to have written data with s3parq to read it with s3parq. The exception to this is un-partitioned parquets, which can now be fetched; the setting allowing this can be turned off however.
 
 *TLDR - to read with s3parq, you need to have written with s3parq* 
  
@@ -107,6 +107,9 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 ![table of difference values](./assets/s3parq_diff_table.png)
 
 ## Changelog
+### 2.1.8
+- Added functionality to fetch un-partitioned, non-s3parq parquet files
+
 ### 2.1.7
 - setup.py no longer requires all of our requirements.txt for developers, 
 but only crucial pieces with looser versioning
