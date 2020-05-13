@@ -107,6 +107,9 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 ![table of difference values](./assets/s3parq_diff_table.png)
 
 ## Changelog
+### 2.1.8
+- Added functionality to fetch un-partitioned, non-s3parq parquet files
+
 ### 2.1.7
 - setup.py no longer requires all of our requirements.txt for developers, 
 but only crucial pieces with looser versioning
