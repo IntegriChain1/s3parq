@@ -503,3 +503,105 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
     logger.info("Done writing to S3.")
 
     return files
+
+def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, custom_redshift_columns: dict, redshift_params: dict = None) -> List[str]:
+    """ Dataframe to S3 Parquet Publisher with a CUSTOM redshift column definition.
+    This function handles the portion of work that will see a dataframe converted
+    to parquet and then published to the given S3 location.
+    It supports partitions and will use the custom redshift columns defined in the
+    custom_redshift_columns dictionary when creating the table schema for the parquet file.
+    It also has the option to automatically publish up to Redshift Spectrum for
+    the newly published parquet files.
+
+    Args:
+        bucket (str): S3 Bucket name
+        key (str): S3 key to lead to the desired dataset
+        partitions (List[str]): List of columns that should be partitioned on
+        dataframe (pd.DataFrame): Dataframe to be published
+        custom_redshift_columns (dict): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
+        redshift_params (dict, Optional):
+            This dictionary should be provided in the following format in order
+            for data to be published to Spectrum. Leave out entirely to avoid
+            publishing to Spectrum.
+            The params should be formatted as follows:
+                - schema_name (str): Name of the Spectrum schema to publish to
+                - table_name (str): Name of the table to write the dataset as
+                - iam_role (str): Role to take while writing data to Spectrum
+                - region (str): AWS region for Spectrum
+                - cluster_id (str): Spectrum cluster id
+                - host (str): Redshift Spectrum host name
+                - port (str): Redshift Spectrum port to use
+                - db_name (str): Redshift Spectrum database name to use
+                - ec2_user (str): If on ec2, the user that should be used
+
+    Returns:
+        A str list of all the newly published object keys
+    """
+    logger.debug(
+        "Running custom publish...")
+
+    session_helper = None
+
+    if redshift_params:
+        if "index" in dataframe.columns:
+            raise ValueError(
+                "'index' is a reserved keyword in Redshift. Please remove or rename your DataFrame's 'index' column.")
+
+        logger.debug(
+            "Found redshift parameters. Checking validity of params...")
+        redshift_params = validate_redshift_params(redshift_params)
+        logger.debug("Redshift parameters valid. Opening Session helper.")
+        session_helper = SessionHelper(
+            region=redshift_params['region'],
+            cluster_id=redshift_params['cluster_id'],
+            host=redshift_params['host'],
+            port=redshift_params['port'],
+            db_name=redshift_params['db_name'],
+            ec2_user=redshift_params['ec2_user']
+        )
+
+        session_helper.configure_session_helper()
+        publish_redshift.create_schema(
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+        logger.debug(
+            f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
+
+        # df_types = _get_dataframe_datatypes(dataframe, partitions)
+        # partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
+        publish_redshift.create_custom_table(
+            redshift_params['table_name'], redshift_params['schema_name'], partitions, s3_url(bucket, key), custom_redshift_columns, session_helper)
+        logger.debug(f"Custom table {redshift_params['table_name']} created.")
+
+    logger.debug("Checking publish params...")
+    check_empty_dataframe(dataframe)
+    check_dataframe_for_timedelta(dataframe)
+    check_partitions(partitions, dataframe)
+    logger.debug("Publish params valid.")
+    logger.debug("Begin writing to S3..")
+
+    files = []
+    for frame_params in _sized_dataframes(dataframe):
+        logger.info(
+            f"Publishing dataframe chunk : {frame_params['lower']} to {frame_params['upper']}")
+        frame = pd.DataFrame(
+            dataframe[frame_params['lower']:frame_params['upper']])
+        _gen_parquet_to_s3(bucket=bucket,
+                           key=key,
+                           dataframe=frame,
+                           partitions=partitions)
+
+        published_files = _assign_partition_meta(bucket=bucket,
+                                                 key=key,
+                                                 dataframe=frame,
+                                                 partitions=partitions,
+                                                 session_helper=session_helper,
+                                                 redshift_params=redshift_params)
+        files = files + published_files
+
+    logger.info("Done writing to S3.")
+
+    return files
