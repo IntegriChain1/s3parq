@@ -156,7 +156,7 @@ def s3_url(bucket: str, key: str) -> str:
 
 
 def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
-                       partitions: list) -> None:
+                       partitions: list, custom_redshift_columns: dict = None) -> None:
     """ Converts the dataframe into a PyArrow table then writes it into S3 as
     parquet. Partitions are done with PyArrow parquet's write.
     NOTE: Timestamps are coerced to ms , this is due to a constraint of parquet
@@ -167,6 +167,11 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
         key (str): S3 key to the root of where the dataset should be published
         dataframe (pd.DataFrame): Dataframe that's being published
         partitions (list): List of partition columns
+        custom_redshift_columns (dict): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         None
@@ -175,13 +180,13 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
 
     try:
         table = pa.Table.from_pandas(
-            df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
+            df=dataframe, schema=_parquet_schema(dataframe, custom_redshift_columns=custom_redshift_columns), preserve_index=False)
     except pa.lib.ArrowTypeError:
         logger.warn(
             "Dataframe conversion to pyarrow table failed, checking object columns for mixed types")
         dataframe_dtypes = dataframe.dtypes.to_dict()
         object_columns = [
-            col for col, col_type in dataframe_dtypes.items() if col_type == "object"]
+            col for col, col_type in dataframe_dtypes.items() if col_type == "object" and "Decimal(" not in str(dataframe[col].values)[:10]]
         for object_col in object_columns:
             if not dataframe[object_col].apply(isinstance, args=[str]).all():
                 logger.warn(
@@ -190,7 +195,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
 
         logger.info("Retrying conversion to pyarrow table")
         table = pa.Table.from_pandas(
-            df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
+            df=dataframe, schema=_parquet_schema(dataframe, custom_redshift_columns=custom_redshift_columns), preserve_index=False)
 
     uri = s3_url(bucket, key)
     logger.debug(f"Writing to s3 location: {uri}...")
@@ -277,11 +282,16 @@ def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=F
     return types
 
 
-def _parquet_schema(dataframe: pd.DataFrame) -> pa.Schema:
+def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = None) -> pa.Schema:
     """ Translates pandas dtypes to PyArrow types and creates a Schema from them
 
     Args:
         dataframe (pd.DataFrame): Dataframe to pull the schema of
+        custom_redshift_columns (dict): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         PyArrow Schema of the given dataframe
@@ -290,7 +300,16 @@ def _parquet_schema(dataframe: pd.DataFrame) -> pa.Schema:
     for col, dtype in dataframe.dtypes.items():
         dtype = dtype.name
         if dtype == 'object':
-            pa_type = pa.string()
+            if custom_redshift_columns:
+                if "Decimal(" in str(dataframe[col].values)[:10]:
+                    s = custom_redshift_columns[col]
+                    precision = int(s[s.find('DECIMAL(')+len('DECIMAL('):s.rfind(',')].strip())
+                    scale = int(s[s.find(',')+len(','):s.rfind(')')].strip())
+                    pa_type = pa.decimal128(precision=precision, scale=scale)
+                else:
+                    pa_type = pa.string()
+            else:
+                pa_type = pa.string()
         elif dtype.startswith('int32'):
             pa_type = pa.int32()
         elif dtype.startswith('int64'):
@@ -570,8 +589,6 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
         logger.debug(
             f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
 
-        # df_types = _get_dataframe_datatypes(dataframe, partitions)
-        # partition_types = _get_dataframe_datatypes(dataframe, partitions, True)
         publish_redshift.create_custom_table(
             redshift_params['table_name'], redshift_params['schema_name'], partitions, s3_url(bucket, key), custom_redshift_columns, session_helper)
         logger.debug(f"Custom table {redshift_params['table_name']} created.")
@@ -592,7 +609,8 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
         _gen_parquet_to_s3(bucket=bucket,
                            key=key,
                            dataframe=frame,
-                           partitions=partitions)
+                           partitions=partitions,
+                           custom_redshift_columns=custom_redshift_columns)
 
         published_files = _assign_partition_meta(bucket=bucket,
                                                  key=key,
