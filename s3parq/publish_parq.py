@@ -204,7 +204,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     logger.debug("Done writing to location.")
 
 
-def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: List['str'], session_helper: SessionHelper, redshift_params=None) -> List[str]:
+def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: List['str'], session_helper: SessionHelper, redshift_params=None, custom_redshift_columns: dict = None) -> List[str]:
     """ Assigns the dataset partition meta to all object keys in the dataset.
     Keys are found by listing all files under the given key and then filtering
     to only those that end in '.parquet' and then further filtering to those
@@ -229,6 +229,11 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 - port (str): Redshift Spectrum port to use
                 - db_name (str): Redshift Spectrum database name to use
                 - ec2_user (str): If on ec2, the user that should be used
+        custom_redshift_columns (dict, Optional): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         A str list of object keys of the objects that got metadata added
@@ -252,7 +257,7 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         s3_client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj}, Key=obj,
                               Metadata={'partition_data_types': str(
                                   _parse_dataframe_col_types(
-                                      dataframe=dataframe, partitions=partitions)
+                                      dataframe=dataframe, partitions=partitions, custom_redshift_columns=custom_redshift_columns)
                               )}, MetadataDirective='REPLACE')
         logger.debug("Done appending metadata.")
     return all_files_without_meta
@@ -287,7 +292,7 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
 
     Args:
         dataframe (pd.DataFrame): Dataframe to pull the schema of
-        custom_redshift_columns (dict): 
+        custom_redshift_columns (dict, Optional): 
             This dictionary contains custom column data type definitions for redshift.
             The params should be formatted as follows:
                 - column name (str)
@@ -334,12 +339,17 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
     return pa.schema(fields=fields)
 
 
-def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
+def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list, custom_redshift_columns: dict = None) -> dict:
     """ Determines the metadata of the partition columns based on dataframe dtypes
 
     Args:
         dataframe (pd.DataFrame): Dataframe to parse the types of
         partitions (list): Partitions in the dataframe to get the type of
+        custom_redshift_columns (dict, Optional): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         Dictionary of column names as keys with their datatypes (string form) as values
@@ -361,6 +371,11 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dic
             dtypes[col] = 'category'
         elif dtype == 'bool':
             dtypes[col] = 'boolean'
+
+        if custom_redshift_columns:
+            if 'DECIMAL' in custom_redshift_columns[col]:
+                dtypes[col] = 'decimal'
+
     logger.debug(f"Done. Metadata determined as {dtypes}")
     return dtypes
 
@@ -617,7 +632,8 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
                                                  dataframe=frame,
                                                  partitions=partitions,
                                                  session_helper=session_helper,
-                                                 redshift_params=redshift_params)
+                                                 redshift_params=redshift_params,
+                                                 custom_redshift_columns=custom_redshift_columns)
         files = files + published_files
 
     logger.info("Done writing to S3.")

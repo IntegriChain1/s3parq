@@ -237,7 +237,7 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
 def create_custom_table(table_name: str, schema_name: str, partitions: dict, path: str, custom_redshift_columns: dict, session_helper: SessionHelper) -> None:
     """ Creates a table in AWS redshift. The table will be named 
     schema_name.table_name and belong to the (existing) Redshift db db_name.
-    The created table will use the custom redshift column data types defined 
+    The created table will use the CUSTOM redshift column data types defined 
     in custom_redshift_columns.
 
     Args:
@@ -258,15 +258,13 @@ def create_custom_table(table_name: str, schema_name: str, partitions: dict, pat
     logger.info("Running create_custom_table...")
 
     _redshift_name_validator(table_name)
-    # redshift_columns = _datatype_mapper(columns)
-    # redshift_partitions = _datatype_mapper(partitions)
 
     logger.info("Generating create columns sql statement with custom redshift columns...")
     logger.info("Generating create partitions sql statement with custom redshift columns...")
     redshift_columns_sql = ""
     redshift_partitions_sql = ""
     for k, v in custom_redshift_columns.items():
-        if v in partitions:
+        if k in partitions:
             redshift_partitions_sql += f'{k} {v}, '
         else:
             redshift_columns_sql += f'{k} {v}, '

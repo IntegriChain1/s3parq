@@ -2,6 +2,7 @@ from mock import patch
 import pytest
 
 from s3parq import publish_redshift
+from s3parq.testing_helper import setup_custom_redshift_columns_and_dataframe
 
 
 class MockScopeObj():
@@ -211,3 +212,55 @@ class Test():
         sql = "(" + sql[:-2] + ")"
         actual = publish_redshift._datatype_mapper(columns)
         assert actual == sql
+
+    # Verify function call for custom create table
+    @patch('s3parq.publish_redshift.SessionHelper')
+    @patch('tests.test_publish_redshift.scope_execute_mock')
+    def test_create_custom_table(self, mock_session_helper, mock_execute):
+
+        custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()[1]
+
+        mock_execute.return_value = MockScopeObj()
+        mock_session_helper.db_session_scope.return_value.__enter__ = scope_execute_mock
+
+        table_name = "my_string"
+        schema_name = "my_schema"
+        path = "s3://lol"
+        columns = {'colA': 'VARCHAR(1000)', 'colB': 'BIGINT',
+                   'colC': 'REAL', 'coldD': 'DECIMAL(5,4)',
+                   'colE': 'VARCHAR', 'colF': 'BOOLEAN'}
+        partitions = {'colA': 'VARCHAR(1000)'}
+
+        expected_sql = f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} {columns} \
+            PARTITIONED BY {partitions} STORED AS PARQUET \
+            LOCATION "{path}";'
+        with mock_session_helper.db_session_scope() as mock_scope:
+            publish_redshift.create_custom_table(table_name, schema_name,
+                                          partitions, path, custom_redshift_columns, mock_session_helper)
+            assert mock_scope.execute.called_once_with(expected_sql)
+
+    # Verify function call for custom create table, no partitions
+    @patch('s3parq.publish_redshift.SessionHelper')
+    @patch('tests.test_publish_redshift.scope_execute_mock')
+    def test_create_custom_table_without_partitions(self, mock_session_helper, mock_execute):
+
+        custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()[1]
+
+        mock_execute.return_value = MockScopeObj()
+        mock_session_helper.db_session_scope.return_value.__enter__ = scope_execute_mock
+
+        table_name = "my_string"
+        schema_name = "my_schema"
+        path = "s3://lol"
+        columns = {'colA': 'VARCHAR(1000)', 'colB': 'BIGINT',
+                   'colC': 'REAL', 'coldD': 'DECIMAL(5,4)',
+                   'colE': 'VARCHAR', 'colF': 'BOOLEAN'}
+        partitions = {}
+
+        expected_sql = f'CREATE EXTERNAL TABLE IF NOT EXISTS {schema_name}.{table_name} {columns} \
+            STORED AS PARQUET \
+            LOCATION "{path}";'
+        with mock_session_helper.db_session_scope() as mock_scope:
+            publish_redshift.create_custom_table(table_name, schema_name,
+                                          partitions, path, custom_redshift_columns, mock_session_helper)
+            assert mock_scope.execute.called_once_with(expected_sql)
