@@ -186,7 +186,8 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
             "Dataframe conversion to pyarrow table failed, checking object columns for mixed types")
         dataframe_dtypes = dataframe.dtypes.to_dict()
         object_columns = [
-            col for col, col_type in dataframe_dtypes.items() if col_type == "object" and "Decimal(" not in str(dataframe[col].values)[:10]]
+            # Skip conversion to strings if the column contains decimal objects. Otherwise, decimal objects will be improperly converted.
+            col for col, col_type in dataframe_dtypes.items() if col_type == "object" and "[Decimal(" not in str(dataframe[col].values)[:9]]
         for object_col in object_columns:
             if not dataframe[object_col].apply(isinstance, args=[str]).all():
                 logger.warn(
