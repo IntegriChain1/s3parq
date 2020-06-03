@@ -307,7 +307,7 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
         dtype = dtype.name
         if dtype == 'object':
             if custom_redshift_columns:
-                if "Decimal(" in str(dataframe[col].values)[:10]:
+                if "[Decimal(" in str(dataframe[col].values)[:9]:
                     s = custom_redshift_columns[col]
                     precision = int(s[s.find('DECIMAL(')+len('DECIMAL('):s.rfind(',')].strip())
                     scale = int(s[s.find(',')+len(','):s.rfind(')')].strip())
