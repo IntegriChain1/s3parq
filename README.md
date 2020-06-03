@@ -107,6 +107,13 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 ![table of difference values](./assets/s3parq_diff_table.png)
 
 ## Changelog
+
+### 2.1.9
+- Added custom_publish function to publish_parq which allows spectrum and redshift tables to
+use custom user defined redshift column definitions.
+- Added create_custom_table to publish_redshift which creates custom redshift tables based on user defined redshift column definitions.
+- Added unit tests for custom_publish and create_custom_table.
+
 ### 2.1.8
 - Added functionality to fetch un-partitioned, non-s3parq parquet files
 
