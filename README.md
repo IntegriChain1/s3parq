@@ -95,6 +95,20 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 
 *NOTE:* Spectrum schemas do _not_ work as normal database schemas. Tables are global to a Redshift Spectrum database, so each schema belonging to `db_name` can access all tables, regardless of the schema they are created with. Instead of schemas, different table registries require different Redshift Spectrum databases.
 
+## Custom Publishes
+By default, s3parq takes the provided Pandas dataframe and infers how to create the spectrum or redshift table schema based on the Pandas data types. However, s3parq provides the option to use a custom publish where the user can define the data types in the Spectrum or Redshift table. This capability gives the user full control over Redshift data types and also allows Redshift's decimal type to be used. To take advantage of Redshift's decimal type, decimal values must be stored in a Pandas object column as Python decimal objects. One caveat of using custom publish is that s3parq will not perform any data type conversion on your behalf. This means that pandas dataframes must be formatted in a way that is compatible with the given redshift data types when handed over to s3parq. 
+
+To perform a custom publish, a dictionary must be created that contains the column definition for the Redshift or Spectrum table. The `custom_redshift_columns` dictionary simply contains the name of the pandas column and the column data type to use in the Spectrum or Redshift table. Any datatype supported by Redshift can be used. See following AWS documentation for a list of supported Redshift data types and aliases: [AWS doc](https://docs.aws.amazon.com/redshift/latest/dg/c_Supported_data_types.html) An example `custom_redshift_columns` dictionary is below.
+
+custom_redshift_columns = {"colA":"VARCHAR(1000)", 
+                        "colB":"BIGINT",
+                        "colC":"REAL",
+                        "colD":"DECIMAL(5,4)",
+                        "colE":"VARCHAR",
+                        "colF":"BOOLEAN"}
+
+Use the `custom_publish` function with a `custom_redshift_columns` dictionary to take advantage of the custom publish feature.
+
 ## Gotchas
 - Filters can only be applied to partitions; this is because we do not actually pull down any of the data until after the filtering has happened. This aligns with data best practices; the things you filter on regularly are the things you should partition on!
 
@@ -112,6 +126,7 @@ If redshift_params is present but invalid, the entire `publish()` fails.
 - Added custom_publish function to publish_parq which allows spectrum and redshift tables to
 use custom user defined redshift column definitions.
 - Added create_custom_table to publish_redshift which creates custom redshift tables based on user defined redshift column definitions.
+- Create_custom_table and publish_redshift enable support for Redshift's decimal data type. Decimals must be stored in a Pandas object column as Python decimal objects.
 - Added unit tests for custom_publish and create_custom_table.
 
 ### 2.1.8

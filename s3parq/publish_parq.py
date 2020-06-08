@@ -307,7 +307,11 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
         dtype = dtype.name
         if dtype == 'object':
             if custom_redshift_columns:
+                # Detect if the Pandas object column contains Python decimal objects. 
                 if "[Decimal(" in str(dataframe[col].values)[:9]:
+                    # If Python decimal objects are present, parse out the precision and scale 
+                    # from the custom_redshift_columns dictionary to use when converting 
+                    # to PyArrow's decimal128 data type.
                     s = custom_redshift_columns[col]
                     precision = int(s[s.find('DECIMAL(')+len('DECIMAL('):s.rfind(',')].strip())
                     scale = int(s[s.find(',')+len(','):s.rfind(')')].strip())
@@ -541,12 +545,15 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
 
 def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, custom_redshift_columns: dict, redshift_params: dict = None) -> List[str]:
     """ Dataframe to S3 Parquet Publisher with a CUSTOM redshift column definition.
+    Custom publish allows custom defined redshift column definitions to be used and 
+    enables support for Redshift's decimal data type. 
     This function handles the portion of work that will see a dataframe converted
     to parquet and then published to the given S3 location.
     It supports partitions and will use the custom redshift columns defined in the
-    custom_redshift_columns dictionary when creating the table schema for the parquet file.
-    It also has the option to automatically publish up to Redshift Spectrum for
-    the newly published parquet files.
+    custom_redshift_columns dictionary when creating the table schema for the parquet file. 
+    View the Custom Publishes section of s3parq's readme file for more guidance on formatting
+    the custom_redshift_columns dictionary. It also has the option to automatically publish up 
+    to Redshift Spectrum for the newly published parquet files. 
 
     Args:
         bucket (str): S3 Bucket name
