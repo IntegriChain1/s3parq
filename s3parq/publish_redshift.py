@@ -234,6 +234,64 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
         logger.info(f'Running query to create table: {new_schema_query}')
         scope.execute(new_schema_query)
 
+def create_custom_table(table_name: str, schema_name: str, partitions: dict, path: str, custom_redshift_columns: dict, session_helper: SessionHelper) -> None:
+    """ Creates a table in AWS redshift. The table will be named 
+    schema_name.table_name and belong to the (existing) Redshift db db_name.
+    The created table will use the CUSTOM redshift column data types defined 
+    in custom_redshift_columns.
+
+    Args:
+        table_name (str): name of created table
+            NOTE: THIS WILL ERROR IF table_name ALREADY EXISTS IN REDSHIFT
+        schema_name (str): name of schema in redshift; Schema must be external 
+            and already exist!
+        partitions (dict): Dict similar to columns, except ONLY with partition columns
+        path (str): Path to published dataset in s3 (excluding partitions)
+        custom_redshift_columns (dict): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
+        session_helper (SessionHelper): Instance of Redshift s3parq.session_helper
+    """
+
+    logger.info("Running create_custom_table...")
+
+    _redshift_name_validator(table_name)
+
+    logger.info("Generating create columns sql statement with custom redshift columns...")
+    logger.info("Generating create partitions sql statement with custom redshift columns...")
+    redshift_columns_sql = ""
+    redshift_partitions_sql = ""
+    for k, v in custom_redshift_columns.items():
+        if k in partitions:
+            redshift_partitions_sql += f'{k} {v}, '
+        else:
+            redshift_columns_sql += f'{k} {v}, '
+    redshift_columns = f"({redshift_columns_sql[:-2]})"  # Slice off the last space and comma
+    redshift_partitions = f"({redshift_partitions_sql[:-2]})"  # Slice off the last space and comma
+
+    with session_helper.db_session_scope() as scope:
+        if_exists_query = f'SELECT EXISTS(SELECT schemaname, tablename FROM SVV_EXTERNAL_TABLES WHERE tablename=\'{table_name}\' AND schemaname=\'{schema_name}\');'
+        table_exists = scope.execute(if_exists_query).first()[0]
+        if table_exists:
+            return
+
+        if not partitions:
+            new_schema_query = (
+                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
+                STORED AS PARQUET \
+                LOCATION \'{path}\';'
+            )
+        else:
+            new_schema_query = (
+                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
+                PARTITIONED BY {redshift_partitions} STORED AS PARQUET \
+                LOCATION \'{path}\';'
+            )
+        logger.info(f'Running query to create table: {new_schema_query}')
+        scope.execute(new_schema_query)
+
 
 def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> None:
     ''' Executes the SQL that creates partitions on the given table for an 

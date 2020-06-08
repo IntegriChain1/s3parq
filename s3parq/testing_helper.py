@@ -282,3 +282,17 @@ def setup_nons3parq_parquet(
 def setup_random_string(min_len: int = 0, max_len: int = 10):
     """ Create a random string of either given min_lento max_len or default 0 to 10 """
     return ''.join([random.choice(ascii_lowercase) for x in range(min_len, max_len)])
+
+def setup_custom_redshift_columns_and_dataframe():
+    """ Create a custom_redshift_columns dictionary that contains redshift column definitions and corresponding mock dataframe """ 
+    sample_data = {'colA': ["A","B","C"], 'colB': [4,5,6], 'colC': [4.12,5.22,6.57], 'colD': [4.1289,5.22,6.577], 'colE': ["test1","test2","test3"], 'colF': [True,False,True]}
+    dataframe = pd.DataFrame(data=sample_data)
+
+    custom_redshift_columns = {"colA":"VARCHAR(1000)", 
+                            "colB":"BIGINT",
+                            "colC":"REAL",
+                            "colD":"DECIMAL(5,4)",
+                            "colE":"VARCHAR",
+                            "colF":"BOOLEAN"}
+
+    return (dataframe, custom_redshift_columns)

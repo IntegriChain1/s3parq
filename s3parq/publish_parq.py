@@ -156,7 +156,7 @@ def s3_url(bucket: str, key: str) -> str:
 
 
 def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
-                       partitions: list) -> None:
+                       partitions: list, custom_redshift_columns: dict = None) -> None:
     """ Converts the dataframe into a PyArrow table then writes it into S3 as
     parquet. Partitions are done with PyArrow parquet's write.
     NOTE: Timestamps are coerced to ms , this is due to a constraint of parquet
@@ -167,6 +167,11 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
         key (str): S3 key to the root of where the dataset should be published
         dataframe (pd.DataFrame): Dataframe that's being published
         partitions (list): List of partition columns
+        custom_redshift_columns (dict): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         None
@@ -175,13 +180,14 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
 
     try:
         table = pa.Table.from_pandas(
-            df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
+            df=dataframe, schema=_parquet_schema(dataframe, custom_redshift_columns=custom_redshift_columns), preserve_index=False)
     except pa.lib.ArrowTypeError:
         logger.warn(
             "Dataframe conversion to pyarrow table failed, checking object columns for mixed types")
         dataframe_dtypes = dataframe.dtypes.to_dict()
         object_columns = [
-            col for col, col_type in dataframe_dtypes.items() if col_type == "object"]
+            # Skip conversion to strings if the column contains decimal objects. Otherwise, decimal objects will be improperly converted.
+            col for col, col_type in dataframe_dtypes.items() if col_type == "object" and "[Decimal(" not in str(dataframe[col].values)[:9]]
         for object_col in object_columns:
             if not dataframe[object_col].apply(isinstance, args=[str]).all():
                 logger.warn(
@@ -190,7 +196,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
 
         logger.info("Retrying conversion to pyarrow table")
         table = pa.Table.from_pandas(
-            df=dataframe, schema=_parquet_schema(dataframe), preserve_index=False)
+            df=dataframe, schema=_parquet_schema(dataframe, custom_redshift_columns=custom_redshift_columns), preserve_index=False)
 
     uri = s3_url(bucket, key)
     logger.debug(f"Writing to s3 location: {uri}...")
@@ -199,7 +205,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     logger.debug("Done writing to location.")
 
 
-def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: List['str'], session_helper: SessionHelper, redshift_params=None) -> List[str]:
+def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, partitions: List['str'], session_helper: SessionHelper, redshift_params=None, custom_redshift_columns: dict = None) -> List[str]:
     """ Assigns the dataset partition meta to all object keys in the dataset.
     Keys are found by listing all files under the given key and then filtering
     to only those that end in '.parquet' and then further filtering to those
@@ -224,6 +230,11 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
                 - port (str): Redshift Spectrum port to use
                 - db_name (str): Redshift Spectrum database name to use
                 - ec2_user (str): If on ec2, the user that should be used
+        custom_redshift_columns (dict, Optional): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         A str list of object keys of the objects that got metadata added
@@ -247,7 +258,7 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         s3_client.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': obj}, Key=obj,
                               Metadata={'partition_data_types': str(
                                   _parse_dataframe_col_types(
-                                      dataframe=dataframe, partitions=partitions)
+                                      dataframe=dataframe, partitions=partitions, custom_redshift_columns=custom_redshift_columns)
                               )}, MetadataDirective='REPLACE')
         logger.debug("Done appending metadata.")
     return all_files_without_meta
@@ -277,11 +288,16 @@ def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=F
     return types
 
 
-def _parquet_schema(dataframe: pd.DataFrame) -> pa.Schema:
+def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = None) -> pa.Schema:
     """ Translates pandas dtypes to PyArrow types and creates a Schema from them
 
     Args:
         dataframe (pd.DataFrame): Dataframe to pull the schema of
+        custom_redshift_columns (dict, Optional): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         PyArrow Schema of the given dataframe
@@ -290,7 +306,20 @@ def _parquet_schema(dataframe: pd.DataFrame) -> pa.Schema:
     for col, dtype in dataframe.dtypes.items():
         dtype = dtype.name
         if dtype == 'object':
-            pa_type = pa.string()
+            if custom_redshift_columns:
+                # Detect if the Pandas object column contains Python decimal objects. 
+                if "[Decimal(" in str(dataframe[col].values)[:9]:
+                    # If Python decimal objects are present, parse out the precision and scale 
+                    # from the custom_redshift_columns dictionary to use when converting 
+                    # to PyArrow's decimal128 data type.
+                    s = custom_redshift_columns[col]
+                    precision = int(s[s.find('DECIMAL(')+len('DECIMAL('):s.rfind(',')].strip())
+                    scale = int(s[s.find(',')+len(','):s.rfind(')')].strip())
+                    pa_type = pa.decimal128(precision=precision, scale=scale)
+                else:
+                    pa_type = pa.string()
+            else:
+                pa_type = pa.string()
         elif dtype.startswith('int32'):
             pa_type = pa.int32()
         elif dtype.startswith('int64'):
@@ -315,12 +344,17 @@ def _parquet_schema(dataframe: pd.DataFrame) -> pa.Schema:
     return pa.schema(fields=fields)
 
 
-def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dict:
+def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list, custom_redshift_columns: dict = None) -> dict:
     """ Determines the metadata of the partition columns based on dataframe dtypes
 
     Args:
         dataframe (pd.DataFrame): Dataframe to parse the types of
         partitions (list): Partitions in the dataframe to get the type of
+        custom_redshift_columns (dict, Optional): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
 
     Returns:
         Dictionary of column names as keys with their datatypes (string form) as values
@@ -342,6 +376,11 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list) -> dic
             dtypes[col] = 'category'
         elif dtype == 'bool':
             dtypes[col] = 'boolean'
+
+        if custom_redshift_columns:
+            if 'DECIMAL' in custom_redshift_columns[col]:
+                dtypes[col] = 'decimal'
+
     logger.debug(f"Done. Metadata determined as {dtypes}")
     return dtypes
 
@@ -498,6 +537,111 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
                                                  partitions=partitions,
                                                  session_helper=session_helper,
                                                  redshift_params=redshift_params)
+        files = files + published_files
+
+    logger.info("Done writing to S3.")
+
+    return files
+
+def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, custom_redshift_columns: dict, redshift_params: dict = None) -> List[str]:
+    """ Dataframe to S3 Parquet Publisher with a CUSTOM redshift column definition.
+    Custom publish allows custom defined redshift column definitions to be used and 
+    enables support for Redshift's decimal data type. 
+    This function handles the portion of work that will see a dataframe converted
+    to parquet and then published to the given S3 location.
+    It supports partitions and will use the custom redshift columns defined in the
+    custom_redshift_columns dictionary when creating the table schema for the parquet file. 
+    View the Custom Publishes section of s3parq's readme file for more guidance on formatting
+    the custom_redshift_columns dictionary. It also has the option to automatically publish up 
+    to Redshift Spectrum for the newly published parquet files. 
+
+    Args:
+        bucket (str): S3 Bucket name
+        key (str): S3 key to lead to the desired dataset
+        partitions (List[str]): List of columns that should be partitioned on
+        dataframe (pd.DataFrame): Dataframe to be published
+        custom_redshift_columns (dict): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
+        redshift_params (dict, Optional):
+            This dictionary should be provided in the following format in order
+            for data to be published to Spectrum. Leave out entirely to avoid
+            publishing to Spectrum.
+            The params should be formatted as follows:
+                - schema_name (str): Name of the Spectrum schema to publish to
+                - table_name (str): Name of the table to write the dataset as
+                - iam_role (str): Role to take while writing data to Spectrum
+                - region (str): AWS region for Spectrum
+                - cluster_id (str): Spectrum cluster id
+                - host (str): Redshift Spectrum host name
+                - port (str): Redshift Spectrum port to use
+                - db_name (str): Redshift Spectrum database name to use
+                - ec2_user (str): If on ec2, the user that should be used
+
+    Returns:
+        A str list of all the newly published object keys
+    """
+    logger.debug(
+        "Running custom publish...")
+
+    session_helper = None
+
+    if redshift_params:
+        if "index" in dataframe.columns:
+            raise ValueError(
+                "'index' is a reserved keyword in Redshift. Please remove or rename your DataFrame's 'index' column.")
+
+        logger.debug(
+            "Found redshift parameters. Checking validity of params...")
+        redshift_params = validate_redshift_params(redshift_params)
+        logger.debug("Redshift parameters valid. Opening Session helper.")
+        session_helper = SessionHelper(
+            region=redshift_params['region'],
+            cluster_id=redshift_params['cluster_id'],
+            host=redshift_params['host'],
+            port=redshift_params['port'],
+            db_name=redshift_params['db_name'],
+            ec2_user=redshift_params['ec2_user']
+        )
+
+        session_helper.configure_session_helper()
+        publish_redshift.create_schema(
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+        logger.debug(
+            f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
+
+        publish_redshift.create_custom_table(
+            redshift_params['table_name'], redshift_params['schema_name'], partitions, s3_url(bucket, key), custom_redshift_columns, session_helper)
+        logger.debug(f"Custom table {redshift_params['table_name']} created.")
+
+    logger.debug("Checking publish params...")
+    check_empty_dataframe(dataframe)
+    check_dataframe_for_timedelta(dataframe)
+    check_partitions(partitions, dataframe)
+    logger.debug("Publish params valid.")
+    logger.debug("Begin writing to S3..")
+
+    files = []
+    for frame_params in _sized_dataframes(dataframe):
+        logger.info(
+            f"Publishing dataframe chunk : {frame_params['lower']} to {frame_params['upper']}")
+        frame = pd.DataFrame(
+            dataframe[frame_params['lower']:frame_params['upper']])
+        _gen_parquet_to_s3(bucket=bucket,
+                           key=key,
+                           dataframe=frame,
+                           partitions=partitions,
+                           custom_redshift_columns=custom_redshift_columns)
+
+        published_files = _assign_partition_meta(bucket=bucket,
+                                                 key=key,
+                                                 dataframe=frame,
+                                                 partitions=partitions,
+                                                 session_helper=session_helper,
+                                                 redshift_params=redshift_params,
+                                                 custom_redshift_columns=custom_redshift_columns)
         files = files + published_files
 
     logger.info("Done writing to S3.")
