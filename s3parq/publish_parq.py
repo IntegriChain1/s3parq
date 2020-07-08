@@ -324,10 +324,14 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
             pa_type = pa.int32()
         elif dtype.startswith('int64'):
             pa_type = pa.int64()
+        elif dtype.startswith('int8'):
+            pa_type = pa.int8()    
         elif dtype.startswith('float32'):
             pa_type = pa.float32()
         elif dtype.startswith('float64'):
             pa_type = pa.float64()
+        elif dtype.startswith('float16'):
+            pa_type = pa.float16()
         elif dtype.startswith('datetime'):
             pa_type = pa.timestamp('ns')
         elif dtype.startswith('date'):

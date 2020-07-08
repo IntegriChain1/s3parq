@@ -1,4 +1,4 @@
-__version__ = "2.1.9"
+__version__ = "2.1.10"
 
 from s3parq.fetch_parq import fetch
 from s3parq.fetch_parq import fetch_diff

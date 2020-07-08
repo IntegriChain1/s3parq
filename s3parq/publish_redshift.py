@@ -153,10 +153,14 @@ def _datatype_mapper(columns: dict) -> dict:
     for col, dtype in columns.items():
         if dtype == 'object':
             dtypes[col] = 'VARCHAR'
+        elif dtype.startswith('int8'):
+            dtypes[col] = 'INTEGER'
         elif dtype.startswith('int32'):
             dtypes[col] = 'INTEGER'
         elif dtype.startswith('int64'):
             dtypes[col] = 'BIGINT'
+        elif dtype.startswith('float16'):
+            dtypes[col] = 'REAL'
         elif dtype.startswith('float32'):
             dtypes[col] = 'REAL'
         elif dtype.startswith('float64'):
