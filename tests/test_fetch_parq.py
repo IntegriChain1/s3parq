@@ -1,625 +1,209 @@
-import pytest
-import pandas as pd
-import numpy as np
-import multiprocessing as mp
-import random
-import datetime
-from string import ascii_lowercase
-import moto
 import boto3
+import datetime
+import dfmock
 from mock import patch
-from dfmock import DFMock
-from collections import OrderedDict
-
-from .mock_helper import MockHelper
+import moto
+import pandas as pd
+import pytest
+import random
 
 import s3parq.fetch_parq as fetch_parq
-from s3parq.publish_parq import publish
+from s3parq.fetch_parq import MissingS3ParqMetadata
+from s3parq.testing_helper import (
+    sorted_dfs_equal_by_pandas_testing,
+    setup_files_list,
+    setup_grouped_dataframe,
+    setup_nons3parq_parquet,
+    setup_partitioned_parquet,
+    setup_random_string
+)
 
-from typing import Dict
+
+""" This test file is meant for testing the "public" iterface of fetch_parq
+For the "private" functionality meant for internal testing, please refer
+to test_fetch_parq_internal.py
+"""
+
+''' Phase 2 tests:
+Refer to functionality of fetch_parq that:
+    - Compares partitions and filters
+    - Creates path(s) that lead to the appropriate files
+    - Gets the list of those files to pull down from
+'''
+
+# Test that functionality of max pulls correctly
+@moto.mock_s3
+def test_gets_max():
+    key = "safekeyprefixname/safedatasetname"
+    bucket = "safebucketname"
+    part_types = {
+        "int_col": "int",
+        "float_col": "float"
+    }
+
+    df = setup_grouped_dataframe(count=10, columns=part_types)
+    bucket, parquet_paths = setup_partitioned_parquet(
+        dataframe=df,
+        bucket=bucket,
+        key=key,
+        partition_data_types={"int_col": "int"}
+    )
+
+    fetched_max = fetch_parq.get_max_partition_value(
+        bucket=bucket, key=key, partition="int_col")
+
+    # Test max of column is max of the fetched partition
+    assert df["int_col"].max() == fetched_max
+
+# Test that the max function denies non-numeric partitions
+# TODO: add category when it becomes supported
+@moto.mock_s3
+def test_gets_max_denies_text():
+    key = "safekeyprefixname/safedatasetname"
+    bucket = "safebucketname"
+    part_types = {
+        "string_col": "string",
+        "bool_col": "bool"
+    }
+    col_types = dict(part_types)
+    col_types["metrics"] = "int"
+    df = setup_grouped_dataframe(count=10, columns=col_types)
+    bucket, parquet_paths = setup_partitioned_parquet(
+        dataframe=df,
+        bucket=bucket,
+        key=key,
+        partition_data_types=part_types
+    )
+
+    with pytest.raises(ValueError):
+        fetched_max = fetch_parq.get_max_partition_value(
+            bucket=bucket, key=key, partition="string_col")
+
+    with pytest.raises(ValueError):
+        fetched_max = fetch_parq.get_max_partition_value(
+            bucket=bucket, key=key, partition="bool_col")
+
+
+''' Phase 3 tests:
+Refer to functionality of fetch_parq that:
+    - Pulls down the parquet files
+    - Transforms the files into dataframes
+    - Concatenates the dataframes and returns them
+'''
+
+# Test that handles full fetch when no files match
+@moto.mock_s3
+def test_fetch_when_none():
+    input_key = "burger-shipment/buns"
+    input_bucket = "loadingdock"
+    partitions = ["exp-date"]
+
+    part_types = {
+        "count": "int",
+        "price": "float",
+        "exp-date": "str"
+    }
+
+    fetched_dtypes = pd.Series(["int64", "float64", "object"], index=[
+        "count", "price", "exp-date"])
+
+    input_df = pd.DataFrame({
+        "count": [2, 4, 7, 9],
+        "price": [2.43, 1.23, 5.76, 3.28],
+        "exp-date": ["x", "z", "a", "zz"]
+    })
+
+    s3_client = boto3.client('s3')
+
+    setup_partitioned_parquet(
+                       dataframe=input_df,
+                       bucket=input_bucket,
+                       key=input_key,
+                       partition_data_types={"exp-date": "string"},
+                       s3_client=s3_client)
+
+    filters = [{
+        "partition": "exp-date",
+        "comparison": "==",
+        "values": ["not-there"]
+    }]
+
+    fetched = fetch_parq.fetch(
+        bucket=input_bucket,
+        key=input_key,
+        filters=filters,
+        parallel=False
+    )
+
+    # Testing that DF is empty and has the expected columns+dtypes
+    assert fetched.empty
+    assert fetched.dtypes.equals(fetched_dtypes)
 
 
 @moto.mock_s3
-class Test():
-
-    def rand_string(self):
-        return ''.join([random.choice(ascii_lowercase) for x in range(0, 10)])
-
-    # TODO: refactor to create local functions and cut Mockhelper
-    def setup_s3(self):
-        bucket = self.rand_string()
-        key = self.rand_string()
-
-        s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket=bucket)
-
-        return bucket, key
-
-    def mock_publish(self, partition_types: Dict[str, str], bucket="safebucketname", key='safekeyprefixname/safedatasetname'):
-        mocker = MockHelper(count=100, s3=True)
-        df = mocker.dataframe
-        partitions = list(partition_types.keys())
-        dfmock = DFMock()
-        dfmock.count = 10
-
-        # add partition columns
-        columns = dict({key: {"option_count": 3, "option_type": value}
-                        for key, value in partition_types.items()})
-
-        # add one actual data column, called metrics
-        columns["metrics"] = "int"
-
-        dfmock.columns = columns
-        dfmock.generate_dataframe()
-
-        # generate dataframe we will write
-        df = dfmock.dataframe
-        bucket = mocker.s3_bucket
-
-        defaults = {
-            'bucket': bucket,
-            'key': key,
-            'dataframe': df,
-            'partitions': partitions
-        }
-        published_files = publish(bucket=bucket,
-                                  key=key,
-                                  dataframe=df,
-                                  partitions=partitions)
-
-        return bucket, df, partitions, published_files
-
-    ''' Phase 1 tests:
-    Refer to functionality of fetch_parq that:
-        - Takes in parameters and checks for validity
-        - Fetches partitions and associated data
-    '''
-
-    def test_invalid_filters(self):
-        inv_fil_params = {
-            "bucket": "fake-bucket",
-            "key": "fake-key",
-            "filters": [{
-                "comparison": "==",
-                "values": ["fake-value"]
-            }]
-        }
-        with pytest.raises(ValueError):
-            fetch_parq.fetch(**inv_fil_params)
-
-        inv_fil_params["filters"] = [{
-            "partition": "fake-part",
-            "comparison": "&&",
-            "value": "some-string"
-        }]
-
-        with pytest.raises(ValueError):
-            fetch_parq.fetch(**inv_fil_params)
-
-    # Test that all files matching key gets listed out
-    def test_fetch_files_list(self):
-        mh = MockHelper(count=100, s3=False, files=True)
-        uploaded = mh.file_ops
-
-        bucket = uploaded['bucket']
-        key = uploaded['key']
-        test_files = uploaded['files']
-
-        fetched_files = fetch_parq._get_all_files_list(bucket, key)
-
-        test_files_keyed = list(
-            map(lambda x: key + "/" + x + ".parquet", test_files))
-
-        test_files_keyed.sort()
-        fetched_files.sort()
-
-        assert (test_files_keyed == fetched_files)
-
-    # Test that all files matching key get listed out even with pagination
-    def test_fetch_files_list_more_than_1k(self):
-        mh = MockHelper(count=1500, s3=False, files=True)
-        uploaded = mh.file_ops
-
-        bucket = uploaded['bucket']
-        key = uploaded['key']
-        test_files = uploaded['files']
-
-        fetched_files = fetch_parq._get_all_files_list(bucket, key)
-
-        test_files_keyed = list(
-            map(lambda x: key + "/" + x + ".parquet", test_files))
-
-        test_files_keyed.sort()
-        fetched_files.sort()
-
-        assert (test_files_keyed == fetched_files)
-
-    # Test that all valid partitions are correctly parsed
-    def test_get_partitions(self):
-        parts = [
-            "fake-key/fil-1=1/fil-2=2/fil-3=str/rngf1.parquet",
-            "fake-key/fil-1=1/fil-2=2/fil-3=rng-str/rngf2.parquet",
-            "fake-key/fil-1=1/fil-2=4/fil-3=str_rng/rngf3.parquet",
-            "fake-key/fil-1=5/fil-2=2/fil-3=str/rngf4.parquet",
-            "fake-key/fil-1=5/fil-2=4/fil-3=99/rngf5.parquet"
-        ]
-        parsed_parts = OrderedDict({
-            "fil-1": {
-                "1",
-                "5"
-            },
-            "fil-2": {
-                "2",
-                "4"
-            },
-            "fil-3": {
-                "str",
-                "rng-str",
-                "str_rng",
-                "99"
-            }
-        })
-
-        key = "key"
-        test_parsed_part = fetch_parq._parse_partitions_and_values(parts, key)
-
-        assert parsed_parts == test_parsed_part
-
-    # Test that if no partitions are present it'll handle without imploding
-    def test_get_partitions_none(self):
-        parts = [
-            "key/rngf1.parc",
-            "key/rngf2.parc",
-            "key/rngf3.parc",
-            "key/rngf4.parc",
-            "key/rngf5.parc"
-        ]
-        parsed_parts = OrderedDict({})
-
-        key = "key"
-        test_parsed_part = fetch_parq._parse_partitions_and_values(parts, key)
-
-        assert parsed_parts == test_parsed_part
-
-    # Test it setting the correct partition data types
-    def test_get_data_types_from_s3(self):
-        mh = MockHelper(count=10, s3=True, files=False)
-        bucket = mh.s3_bucket
-
-        s3_client = boto3.client('s3')
-        files = s3_client.list_objects_v2(Bucket=bucket)
-        first_file_key = files["Contents"][0]["Key"]
-        partition_metadata = fetch_parq._get_partitions_and_types(
-            first_file_key, bucket)
-
-        assert partition_metadata == {"string_col": "string",
-                                      "int_col": "integer",
-                                      "float_col": "float",
-                                      "bool_col": "boolean",
-                                      "datetime_col": "datetime"
-                                      }
-
-    # Test that it errors if data types are mismatched
-    def test_mismatch_argument_data_types(self):
-        part_types = {"fil-3": "string",
-                      "fil-2": "int",
-                      "fil-1": "float"
-                      }
-
-        parsed_parts = OrderedDict({
-            "fil-1": set([
-                "1.23",
-                "5.45"
-            ]),
-            "fil-2": set([
-                "2",
-                "4"
-            ]),
-            "fil-3": set([
-                "str",
-                "rng-str",
-                "str_rng",
-                "99"
-            ])
-        })
-
-        test_typed_parts = OrderedDict({
-            "fil-1": set([
-                float(1.23),
-                float(5.45)
-            ]),
-            "fil-2": set([
-                int(2),
-                int(4)
-            ]),
-            "fil-3": set([
-                "str",
-                "rng-str",
-                "str_rng",
-                "99"
-            ])
-        })
-
-        typed_parts = fetch_parq._get_partition_value_data_types(
-            parsed_parts=parsed_parts,
-            part_types=part_types
-        )
-
-        assert typed_parts == test_typed_parts
-
-    # Test that it handles correct without false positives
-    def test_match_argument_data_types(self):
-        part_types = {"fil-2": "int",
-                      "fil-1": "int"
-                      }
-
-        parsed_parts = OrderedDict({
-            "fil-1": set([
-                "1.23",
-                "5.45"
-            ]),
-            "fil-2": set([
-                "2",
-                "4"
-            ])
-        })
-
-        with pytest.raises(ValueError):
-            fetch_parq._get_partition_value_data_types(
-                parsed_parts=parsed_parts,
-                part_types=part_types
-            )
-
-    ''' Phase 2 tests:
-    Refer to functionality of fetch_parq that:
-        - Compares partitions and filters
-        - Creates path(s) that lead to the appropriate files
-        - Gets the list of those files to pull down from
-    '''
-
-    # Test that functionality of max pulls correctly
-    def test_gets_max(self):
-        key = "safekeyprefixname/safedatasetname"
-        bucket = "safebucketname"
-        part_types = {
-            "int_col": "int",
-            "float_col": "float"
-        }
-        bucket, df, partitions, published_files = self.mock_publish(
-            bucket=bucket,
-            key=key,
-            partition_types=part_types
-        )
-
-        fetched_max = fetch_parq.get_max_partition_value(
-            bucket=bucket, key=key, partition="int_col")
-
-        # Test max of column is max of the fetched partition
-        assert df["int_col"].max() == fetched_max
-
-    # Test that the max function denies non-numeric partitions
-    # TODO: add category when it becomes supported
-    def test_gets_max_denies_text(self):
-        key = "safekeyprefixname/safedatasetname"
-        bucket = "safebucketname"
-        part_types = {
-            "string_col": "string",
-            "bool_col": "bool"
-        }
-        bucket, df, partitions, published_files = self.mock_publish(
-            bucket=bucket,
-            key=key,
-            partition_types=part_types
-        )
-
-        with pytest.raises(ValueError):
-            fetched_max = fetch_parq.get_max_partition_value(
-                bucket=bucket, key=key, partition="string_col")
-
-        with pytest.raises(ValueError):
-            fetched_max = fetch_parq.get_max_partition_value(
-                bucket=bucket, key=key, partition="bool_col")
-
-    # Test that it errors if filters have no matching partitiion
-    def test_no_part_for_filter(self):
-        part_types1 = {"fil-2": "int",
-                       "fil-1": "int"
-                       }
-
-        filters1 = [{
-            "partition": "fake-partition",
-            "comparison": "==",
-            "values": ["fake-value"]
-        }]
-
-        with pytest.raises(ValueError):
-            fetch_parq._validate_matching_filter_data_type(
-                part_types1, filters1)
-
-        filters2 = [{
-            "partition": "fil-1",
-            "comparison": ">",
-            "values": ["fake-value"]
-        }]
-
-        part_types2 = {"fil-1": "string"}
-
-        with pytest.raises(ValueError):
-            fetch_parq._validate_matching_filter_data_type(
-                part_types2, filters2)
-
-    # Test that it filters partitions fully
-    def test_filter_all_parts(self):
-        typed_parts = OrderedDict({
-            "fil-1": set([
-                float(1.23),
-                float(3.9),
-                float(5.45)
-            ]),
-            "fil-2": set([
-                int(2),
-                int(4)
-            ]),
-            "fil-3": set([
-                "str",
-                "rng-str",
-                "str_rng",
-                "99"
-            ])
-        })
-
-        filters = [{
-            "partition": "fil-1",
-            "comparison": ">",
-            "values": [5]
-        }, {
-            "partition": "fil-2",
-            "comparison": "==",
-            "values": [2]
-        }, {
-            "partition": "fil-3",
-            "comparison": "==",
-            "values": ["str"]
-        }]
-
-        fil_paths = [
-            'fake-key/fil-1=5.45/fil-2=2/fil-3=str/'
-        ]
-
-        key = "fake-key"
-        filters = filters
-
-        filter_paths = fetch_parq._get_filtered_key_list(
-            typed_parts=typed_parts, filters=filters, key=key)
-
-        filter_paths.sort()
-        fil_paths.sort()
-
-        assert filter_paths == fil_paths
-
-    # Test that it filters partitions when only some are filtered
-    def test_filter_some_parts(self):
-        typed_parts = OrderedDict({
-            "fil-1": set([
-                float(1.23),
-                float(3.9),
-                float(5.45)
-            ]),
-            "fil-2": set([
-                int(2),
-                int(4)
-            ]),
-            "fil-3": set([
-                "str",
-                "rng-str",
-                "str_rng",
-                "99"
-            ])
-        })
-
-        filters = [{
-            "partition": "fil-1",
-            "comparison": ">",
-            "values": [5]
-        }, {
-            "partition": "fil-2",
-            "comparison": "==",
-            "values": [2]
-        }]
-
-        fil_paths = [
-            'fake-key/fil-1=5.45/fil-2=2/fil-3=99/',
-            'fake-key/fil-1=5.45/fil-2=2/fil-3=str/',
-            'fake-key/fil-1=5.45/fil-2=2/fil-3=rng-str/',
-            'fake-key/fil-1=5.45/fil-2=2/fil-3=str_rng/'
-        ]
-
-        key = "fake-key"
-        filters = filters
-
-        filter_paths = fetch_parq._get_filtered_key_list(
-            typed_parts=typed_parts, key=key, filters=filters)
-
-        filter_paths.sort()
-        fil_paths.sort()
-
-        assert filter_paths == fil_paths
-
-    # Test that it handles filters ridding everything
-    def test_filter_to_none(self):
-        typed_parts = OrderedDict({
-            "fil-1": set([
-                float(1.23),
-                float(3.9),
-                float(5.45)
-            ]),
-            "fil-2": set([
-                int(2),
-                int(4)
-            ]),
-            "fil-3": set([
-                "str",
-                "rng-str"
-            ])
-        })
-
-        filters = [{
-            "partition": "fil-1",
-            "comparison": ">",
-            "values": [90]
-        }, {
-            "partition": "fil-2",
-            "comparison": "==",
-            "values": [23]
-        }]
-
-        fil_paths = []
-
-        key = "fake-key"
-        filters = filters
-
-        filter_paths = fetch_parq._get_filtered_key_list(
-            typed_parts=typed_parts, key=key, filters=filters)
-
-        filter_paths.sort()
-        fil_paths.sort()
-
-        assert filter_paths == fil_paths
-
-    # Test getting the file list for all paths
-    def test_get_all_file_lists(self):
-        pass
-
-    # Test getting the file lists when there are no files
-    def test_get_all_file_lists_no_files(self):
-        pass
-
-    ''' Phase 3 tests:
-    Refer to functionality of fetch_parq that:
-        - Pulls down the parquet files
-        - Transforms the files into dataframes
-        - Concatenates the dataframes and returns them
-    '''
-
-    # Test that handles full fetch when no files match
-    def test_fetch_when_none(self):
-        input_key = "burger-shipment/buns"
-        input_bucket = "loadingdock"
-        partitions = ["exp-date"]
-
-        part_types = {
-            "count": "int",
-            "price": "float",
-            "exp-date": "str"
-        }
-
-        fetched_dtypes = pd.Series(["int64", "float64", "object"], index=[
-                                   "count", "price", "exp-date"])
-
-        input_df = pd.DataFrame({
-            "count": [2, 4, 7, 9],
-            "price": [2.43, 1.23, 5.76, 3.28],
-            "exp-date": ["x", "z", "a", "zz"]
-        })
-
-        s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket=input_bucket)
-
-        published_files = publish(bucket=input_bucket,
-                                  key=input_key,
-                                  dataframe=input_df,
-                                  partitions=partitions)
-
-        filters = [{
-            "partition": "exp-date",
-            "comparison": "==",
-            "values": ["not-there"]
-        }]
-
-        fetched = fetch_parq.fetch(
-            bucket=input_bucket,
-            key=input_key,
-            filters=filters,
-            parallel=False
-        )
-
-        # Testing that DF is empty and has the expected columns+dtypes
-        assert fetched.empty
-        assert fetched.dtypes.equals(fetched_dtypes)
-
-    # captures from a single parquet path dataset
-    def test_s3_parquet_to_dataframe(self):
-        partition_types = {"string_col": "string",
-                           "int_col": "integer",
-                           "float_col": "float",
-                           "bool_col": "boolean",
-                           "datetime_col": "datetime"}
-
-        key = f"basekey"
-        print(f"Key is: {key}")
-
-        bucket = "foobucket"
-        key = "fookey"
-        partitions = partition_types.keys()
-        bucket, df, partitions, published_files = self.mock_publish(
-            bucket=bucket, key=key, partition_types=partition_types)
-
-        # fetch._partition_metadata = mock.partition_metadata
-        first_published_file = published_files[0]
-        response = fetch_parq._s3_parquet_to_dataframe(
-            bucket=bucket, key=first_published_file, partition_metadata=partition_types)
-
-        assert isinstance(response, pd.DataFrame)
-        for partition in partition_types.keys():
-            assert (partition in response.columns)
-
-        # assert set(fetch._partition_metadata.keys()) <= set(response.columns)
-
-        # captures from multiple paths in dataset
-
-        # paths = set(['/'.join(mock.paths[x].split('/')[:-1])
-        #             for x in range(len(mock.paths))])
-        # big_df = fetch._get_filtered_data(bucket=mock.s3_bucket, paths=paths)
-
-        # assert isinstance(big_df, pd.DataFrame)
-        # assert set(mock.dataframe.columns) == set(big_df.columns)
-        # assert mock.dataframe.shape == big_df.shape
-
-    def test_get_partition_difference_string(self):
-        bucket = 'safebucket'
-        key = 'dataset'
-        partition = 'hamburger'
-        rando_values = [self.rand_string() for x in range(10)]
-        s3_paths = [
-            f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
-
-        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
-            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-                _get_all_files_list.return_value = s3_paths
-                _get_partitions_and_types.return_value = {
-                    "hamburger": "string"}
-
-                # partition values not in list values
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, rando_values[:-2])
-                assert deltas == [rando_values[-2]]
-                # list values not in partition values
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, rando_values, True)
-                assert deltas == [rando_values[-1]]
-
-    def test_get_partition_difference_string_when_none(self):
-        bucket = 'safebucket'
-        key = 'dataset'
-        partition = 'hamburger'
-        rando_values = [self.rand_string() for x in range(10)]
-        rando_values.sort()
-        s3_paths = []
-
-        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
-            _get_all_files_list.return_value = []
-
-            # values when theres no bucket data
+def test_get_partition_difference_string():
+    bucket = 'safebucket'
+    key = 'dataset'
+    partition = 'hamburger'
+    rando_values = [setup_random_string() for x in range(10)]
+    s3_paths = [
+        f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
+
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
+        with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+            get_all_files_list.return_value = s3_paths
+            _get_partitions_and_types.return_value = {
+                "hamburger": "string"}
+
+            # partition values not in list values
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, rando_values[:-2])
+            assert deltas == [rando_values[-2]]
+            # list values not in partition values
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, rando_values, True)
+            assert deltas == [rando_values[-1]]
+
+
+@moto.mock_s3
+def test_get_partition_difference_string_when_none():
+    bucket = 'safebucket'
+    key = 'dataset'
+    partition = 'hamburger'
+    rando_values = [setup_random_string() for x in range(10)]
+    rando_values.sort()
+    s3_paths = []
+
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
+        get_all_files_list.return_value = []
+
+        # values when theres no bucket data
+        deltas = fetch_parq.get_diff_partition_values(
+            bucket, key, partition, rando_values[:-2])
+        deltas.sort()
+        assert deltas == []
+        # values when theres no bucket data and reversed
+        deltas = fetch_parq.get_diff_partition_values(
+            bucket, key, partition, rando_values[:-2], True)
+        deltas.sort()
+        assert deltas == rando_values[:-2]
+
+
+@moto.mock_s3
+def test_get_partition_difference_int_when_none():
+    bucket = 'safebucket'
+    key = 'dataset'
+    partition = 'hamburger'
+    rando_values = [1, 2, 3, 4, 5]
+    rando_values.sort()
+    s3_paths = []
+
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
+        with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+            get_all_files_list.return_value = []
+            _get_partitions_and_types.return_value = 777.09
+
+            # values when there is no bucket data
             deltas = fetch_parq.get_diff_partition_values(
                 bucket, key, partition, rando_values[:-2])
             deltas.sort()
@@ -630,223 +214,352 @@ class Test():
             deltas.sort()
             assert deltas == rando_values[:-2]
 
-    def test_get_partition_difference_int_when_none(self):
-        bucket = 'safebucket'
-        key = 'dataset'
-        partition = 'hamburger'
-        rando_values = [1,2,3,4,5]
-        rando_values.sort()
-        s3_paths = []
 
-        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
-            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-                _get_all_files_list.return_value = []
-                _get_partitions_and_types.return_value = 777.09
+@moto.mock_s3
+def test_get_partition_difference_int_comparison_none():
+    bucket = 'safebucket'
+    key = 'dataset'
+    partition = 'hamburger'
+    rando_values = [1, 2, 3, 4, 5]
+    rando_values.sort()
+    s3_paths = [
+        f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
 
-                # values when there is no bucket data
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, rando_values[:-2])
-                deltas.sort()
-                assert deltas == []
-                # values when theres no bucket data and reversed
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, rando_values[:-2], True)
-                deltas.sort()
-                assert deltas == rando_values[:-2]
-            
-    def test_get_partition_difference_int_comparison_none(self):
-        bucket = 'safebucket'
-        key = 'dataset'
-        partition = 'hamburger'
-        rando_values = [1,2,3,4,5]
-        rando_values.sort()
-        s3_paths = [
-            f"{key}/{partition}={x}/12345.parquet" for x in rando_values[:-1]]
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
+        with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+            get_all_files_list.return_value = s3_paths
+            _get_partitions_and_types.return_value = {
+                "hamburger": "integer"}
 
-        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
-            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-                _get_all_files_list.return_value = s3_paths
-                _get_partitions_and_types.return_value = {
-                    "hamburger": "integer"}
+            # values when there is no sent comparisons
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, [])
+            deltas.sort()
+            assert deltas == rando_values[:-1]
+            # values when there is no sent comparisons and reversed
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, [], True)
+            deltas.sort()
+            assert deltas == []
 
-                # values when there is no sent comparisons
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, [])
-                deltas.sort()
-                assert deltas == rando_values[:-1]
-                # values when there is no sent comparisons and reversed
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, [], True)
-                deltas.sort()
-                assert deltas == []
 
-    def test_get_partition_difference_datetime(self):
-        bucket = 'safebucket'
-        key = 'dataset'
-        partition = 'burgertime'
-        rando_values = [(datetime.datetime.now() - datetime.timedelta(
-            seconds=random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
-        s3_paths = [
-            f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values[:-1]]
+@moto.mock_s3
+def test_get_partition_difference_datetime():
+    bucket = 'safebucket'
+    key = 'dataset'
+    partition = 'burgertime'
+    rando_values = [(datetime.datetime.now() - datetime.timedelta(
+        seconds=random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
+    s3_paths = [
+        f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values[:-1]]
 
-        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
-            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-                _get_all_files_list.return_value = s3_paths
-                _get_partitions_and_types.return_value = {
-                    "burgertime": "datetime"}
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
+        with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+            get_all_files_list.return_value = s3_paths
+            _get_partitions_and_types.return_value = {
+                "burgertime": "datetime"}
 
-                # partition values not in list values
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, rando_values[:-2])
-                assert deltas == [rando_values[-2]]
+            # partition values not in list values
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, rando_values[:-2])
+            assert deltas == [rando_values[-2]]
 
-                # list values not in partition values
-                deltas = fetch_parq.get_diff_partition_values(
-                    bucket, key, partition, rando_values, reverse=True)
-                assert deltas == [rando_values[-1]]
+            # list values not in partition values
+            deltas = fetch_parq.get_diff_partition_values(
+                bucket, key, partition, rando_values, reverse=True)
+            assert deltas == [rando_values[-1]]
 
-    def test_get_partition_values(self):
-        bucket = 'safebucket'
-        key = 'dataset'
-        partition = 'burgertime'
-        rando_values = [(datetime.datetime.now() - datetime.timedelta(
-            seconds=random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
-        s3_paths = [
-            f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values]
 
-        with patch("s3parq.fetch_parq._get_all_files_list") as _get_all_files_list:
-            with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
-                _get_all_files_list.return_value = s3_paths
-                _get_partitions_and_types.return_value = {
-                    "burgertime": "datetime"}
+@moto.mock_s3
+def test_get_partition_values():
+    bucket = 'safebucket'
+    key = 'dataset'
+    partition = 'burgertime'
+    rando_values = [(datetime.datetime.now() - datetime.timedelta(
+        seconds=random.randrange(100 * 24 * 60 * 60))).replace(microsecond=0) for x in range(5)]
+    s3_paths = [
+        f"{key}/{partition}={x.strftime('%Y-%m-%d %H:%M:%S')}/12345.parquet" for x in rando_values]
 
-                all_values = fetch_parq.get_all_partition_values(
-                    bucket=bucket, key=key, partition=partition)
+    with patch("s3parq.fetch_parq.get_all_files_list") as get_all_files_list:
+        with patch("s3parq.fetch_parq._get_partitions_and_types") as _get_partitions_and_types:
+            get_all_files_list.return_value = s3_paths
+            _get_partitions_and_types.return_value = {
+                "burgertime": "datetime"}
 
-                assert set(all_values) == set(rando_values)
+            all_values = fetch_parq.get_all_partition_values(
+                bucket=bucket, key=key, partition=partition)
 
-    # Test that the data in the input but not comparison is fetched
-    def test_fetches_diff(self):
-        input_key = "burger-shipment/buns"
-        input_bucket = "loadingdock"
-        comparison_key = "burger-inventory/buns"
-        comparison_bucket = "backroom"
-        partitions = ["exp-date"]
+            assert set(all_values) == set(rando_values)
 
-        part_types = {
-            "count": "int",
-            "price": "float",
-            "exp-date": "string"
-        }
+# Test that the data in the input but not comparison is fetched
+@moto.mock_s3
+def test_fetches_diff():
+    input_key = "burger-shipment/buns"
+    input_bucket = "loadingdock"
+    comparison_key = "burger-inventory/buns"
+    comparison_bucket = "backroom"
+    partitions = ["exp-date"]
 
-        input_df = pd.DataFrame({
-            "count": [2, 4, 7, 9],
-            "price": [2.43, 1.23, 5.76, 3.28],
-            "exp-date": ["x", "z", "a", "zz"]
-        })
-        comparison_df = pd.DataFrame({
-            "count": [2, 3, 4, 9],
-            "price": [2.43, 4.35, 1.23, 3.28],
-            "exp-date": ["x", "y", "z", "zz"]
-        })
+    part_types = {
+        "count": "int",
+        "price": "float",
+        "exp-date": "string"
+    }
 
-        s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket=input_bucket)
-        s3_client.create_bucket(Bucket=comparison_bucket)
+    input_df = pd.DataFrame({
+        "count": [2, 4, 7, 9, 9],
+        "price": [2.43, 1.23, 5.76, 3.28, 4.44],
+        "exp-date": ["x", "z", "a", "zz", "l"]
+    })
+    comparison_df = pd.DataFrame({
+        "count": [2, 3, 4, 9],
+        "price": [2.43, 4.35, 1.23, 3.28],
+        "exp-date": ["x", "y", "z", "zz"]
+    })
 
-        published_files = publish(bucket=input_bucket,
-                                  key=input_key,
-                                  dataframe=input_df,
-                                  partitions=partitions)
+    s3_client = boto3.client('s3')
 
-        published_files = publish(bucket=comparison_bucket,
-                                  key=comparison_key,
-                                  dataframe=comparison_df,
-                                  partitions=partitions)
+    setup_partitioned_parquet(
+        dataframe=input_df,
+        bucket=input_bucket,
+        key=input_key,
+        partition_data_types={"exp-date": "string"},
+        s3_client=s3_client)
 
-        test_df = pd.DataFrame({
-            "count": [7],
-            "price": [5.76],
-            "exp-date": ["a"]
-        })
+    setup_partitioned_parquet(
+        dataframe=comparison_df,
+        bucket=comparison_bucket,
+        key=comparison_key,
+        partition_data_types={"exp-date": "string"},
+        s3_client=s3_client)
 
-        fetched_diff = fetch_parq.fetch_diff(
-            input_bucket=input_bucket,
-            input_key=input_key,
-            comparison_bucket=comparison_bucket,
-            comparison_key=comparison_key,
-            partition=partitions[0],
-            parallel=False
+    test_df = pd.DataFrame({
+        "count": [7, 9],
+        "price": [5.76, 4.44],
+        "exp-date": ["a", "l"]
+    })
+
+    fetched_diff = fetch_parq.fetch_diff(
+        input_bucket=input_bucket,
+        input_key=input_key,
+        comparison_bucket=comparison_bucket,
+        comparison_key=comparison_key,
+        partition=partitions[0],
+        parallel=False
+    )
+
+    assert fetched_diff.shape == test_df.shape
+    sorted_dfs_equal_by_pandas_testing(fetched_diff, test_df)
+
+# Test that the dataframes are fetched properly when one side is empty and the other isnt
+@moto.mock_s3
+def test_fetches_diff_none():
+    input_key = "clay/beads"
+    input_bucket = "kiln"
+    comparison_key = "new-case"
+    comparison_bucket = "storefront"
+    partitions = ["price"]
+
+    part_types = {
+        "count": "int",
+        "price": "float"
+    }
+
+    input_df = pd.DataFrame({
+        "count": [2, 4, 7, 9],
+        "price": [2.43, 1.23, 5.76, 3.28]
+    })
+
+    s3_client = boto3.client('s3')
+    s3_client.create_bucket(Bucket=input_bucket)
+    s3_client.create_bucket(Bucket=comparison_bucket)
+
+    setup_partitioned_parquet(
+        dataframe=input_df,
+        bucket=input_bucket,
+        key=input_key,
+        partition_data_types={"price": "float"},
+        s3_client=s3_client)
+
+    fetched_diff = fetch_parq.fetch_diff(
+        input_bucket=input_bucket,
+        input_key=input_key,
+        comparison_bucket=comparison_bucket,
+        comparison_key=comparison_key,
+        partition=partitions[0],
+        parallel=False
+    )
+
+    fetched_diff.sort_values(by=['price'], inplace=True)
+    input_df.sort_values(by=['price'], inplace=True)
+
+    sorted_dfs_equal_by_pandas_testing(fetched_diff, input_df)
+
+    fetched_diff_reverse = fetch_parq.fetch_diff(
+        input_bucket=input_bucket,
+        input_key=input_key,
+        comparison_bucket=comparison_bucket,
+        comparison_key=comparison_key,
+        partition=partitions[0],
+        reverse=True,
+        parallel=False
+    )
+
+    assert fetched_diff_reverse.empty
+
+    fetched_diff_reverse_both = fetch_parq.fetch_diff(
+        input_bucket=comparison_bucket,
+        input_key=comparison_key,
+        comparison_bucket=input_bucket,
+        comparison_key=input_key,
+        partition=partitions[0],
+        reverse=True,
+        parallel=False
+    )
+
+    sorted_dfs_equal_by_pandas_testing(fetched_diff_reverse_both, input_df)
+
+# Test that all files matching key gets listed out
+@moto.mock_s3
+def test_fetch_files_list():
+    uploaded = setup_files_list(count=100)
+
+    bucket = uploaded['bucket']
+    key = uploaded['key']
+    test_files = uploaded['files']
+
+    fetched_files = fetch_parq.get_all_files_list(bucket, key)
+
+    test_files_keyed = list(
+        map(lambda x: key + "/" + x + ".parquet", test_files))
+
+    test_files_keyed.sort()
+    fetched_files.sort()
+
+    assert (test_files_keyed == fetched_files)
+
+# Test that all files matching key get listed out even with pagination
+@pytest.mark.slow
+@moto.mock_s3
+def test_fetch_files_list_more_than_1k():
+    uploaded = setup_files_list(count=1500)
+
+    bucket = uploaded['bucket']
+    key = uploaded['key']
+    test_files = uploaded['files']
+
+    fetched_files = fetch_parq.get_all_files_list(bucket, key)
+
+    test_files_keyed = list(
+        map(lambda x: key + "/" + x + ".parquet", test_files))
+
+    test_files_keyed.sort()
+    fetched_files.sort()
+
+    assert (test_files_keyed == fetched_files)
+
+
+# Test : fetching without metadata
+# Test : fetching when metadata not allowed
+@moto.mock_s3
+def test_fetches_nons3parq():
+    input_key = "burger-shipment/buns"
+    input_bucket = "loadingdock"
+
+    input_df = pd.DataFrame({
+        "count": [2, 4, 7, 9, 9],
+        "price": [2.43, 1.23, 5.76, 3.28, 4.44],
+        "exp-date": ["x", "z", "a", "zz", "l"]
+    })
+
+    s3_client = boto3.client('s3')
+
+    s3_key = "burger-shipment/buns"
+
+    setup_nons3parq_parquet(
+        dataframe=input_df,
+        bucket=input_bucket,
+        key=input_key,
+        s3_client=s3_client
+    )
+
+    fetched_diff = fetch_parq.fetch(
+        bucket=input_bucket,
+        key=s3_key,
+        parallel=False
+    )
+
+    assert fetched_diff.shape == input_df.shape
+    sorted_dfs_equal_by_pandas_testing(fetched_diff, input_df)
+
+# test when there's multiple parquet splits
+@pytest.mark.slow
+@moto.mock_s3
+def test_fetches_nons3parq_large_parquet():
+    input_key = "burger-shipment/buns"
+    input_bucket = "loadingdock"
+
+    df = dfmock.DFMock(count=100000)
+    df.columns = {"string_options": {"option_count": 4, "option_type": "string"},
+                  "int_options": {"option_count": 4, "option_type": "int"},
+                  "datetime_options": {"option_count": 5, "option_type": "datetime"},
+                  "float_options": {"option_count": 2, "option_type": "float"},
+                  "metrics": "integer"
+                  }
+
+    df.generate_dataframe()
+    # This is unfortunately big, but getting it to force a partition doesn't work otherwise
+    df.grow_dataframe_to_size(500)
+
+    input_df = pd.DataFrame(df.dataframe)
+
+    s3_client = boto3.client('s3')
+
+    s3_key = "burger-shipment/buns"
+
+    setup_nons3parq_parquet(
+        dataframe=input_df,
+        bucket=input_bucket,
+        key=input_key,
+        s3_client=s3_client
+    )
+
+    fetched_diff = fetch_parq.fetch(
+        bucket=input_bucket,
+        key=s3_key,
+        parallel=False
+    )
+
+    assert fetched_diff.shape == input_df.shape
+    sorted_dfs_equal_by_pandas_testing(fetched_diff, input_df)
+
+
+@moto.mock_s3
+def test_not_fetches_nons3parq():
+    input_key = "burger-shipment/buns"
+    input_bucket = "loadingdock"
+
+    input_df = pd.DataFrame({
+        "count": [2, 4, 7, 9, 9],
+        "price": [2.43, 1.23, 5.76, 3.28, 4.44],
+        "exp-date": ["x", "z", "a", "zz", "l"]
+    })
+
+    s3_client = boto3.client('s3')
+
+    s3_key = "burger-shipment/buns"
+
+    setup_nons3parq_parquet(
+        dataframe=input_df,
+        bucket=input_bucket,
+        key=input_key,
+        s3_client=s3_client
+    )
+
+    with pytest.raises(MissingS3ParqMetadata):
+        fetched_diff = fetch_parq.fetch(
+            bucket=input_bucket,
+            key=s3_key,
+            parallel=False,
+            accept_not_s3parq=False
         )
-
-        # Test data knows these are single row-ed DFs, testing that data
-        #   like this cause pandas DF equals is ???
-        assert fetched_diff.iloc[0].equals(test_df.iloc[0])
-
-    # Test that the dataframes are fetched properly when one side is empty and the other isnt
-    def test_fetches_diff_none(self):
-        input_key = "clay/beads"
-        input_bucket = "kiln"
-        comparison_key = "new-case"
-        comparison_bucket = "storefront"
-        partitions = ["price"]
-
-        part_types = {
-            "count": "int",
-            "price": "float"
-        }
-
-        input_df = pd.DataFrame({
-            "count": [2, 4, 7, 9],
-            "price": [2.43, 1.23, 5.76, 3.28]
-        })
-
-        s3_client = boto3.client('s3')
-        s3_client.create_bucket(Bucket=input_bucket)
-        s3_client.create_bucket(Bucket=comparison_bucket)
-
-        published_files = publish(bucket=input_bucket,
-                                  key=input_key,
-                                  dataframe=input_df,
-                                  partitions=partitions)
-
-        fetched_diff = fetch_parq.fetch_diff(
-            input_bucket=input_bucket,
-            input_key=input_key,
-            comparison_bucket=comparison_bucket,
-            comparison_key=comparison_key,
-            partition=partitions[0],
-            parallel=False
-        )
-
-        fetched_diff.sort_values(by=['price'], inplace=True)
-        input_df.sort_values(by=['price'], inplace=True)
-
-        assert np.array_equal(fetched_diff.values, input_df.values)
-
-        fetched_diff_reverse = fetch_parq.fetch_diff(
-            input_bucket=input_bucket,
-            input_key=input_key,
-            comparison_bucket=comparison_bucket,
-            comparison_key=comparison_key,
-            partition=partitions[0],
-            reverse=True,
-            parallel=False
-        )
-
-        assert fetched_diff_reverse.empty
-
-        fetched_diff_reverse_both = fetch_parq.fetch_diff(
-            input_bucket=comparison_bucket,
-            input_key=comparison_key,
-            comparison_bucket=input_bucket,
-            comparison_key=input_key,
-            partition=partitions[0],
-            reverse=True,
-            parallel=False
-        )
-
-        fetched_diff.sort_values(by=['price'], inplace=True)
-        input_df.sort_values(by=['price'], inplace=True)
-
-        assert np.array_equal(fetched_diff_reverse_both.values, input_df.values)

@@ -1,39 +1,39 @@
 import boto3
-import moto
-import s3parq
-import pytest
 import dfmock
-from s3parq.testing_helper import df_equal_by_set
-from s3parq.publish_parq import publish
-from s3parq.fetch_parq import fetch
+import moto
 import pandas as pd
+from pandas.util.testing import assert_frame_equal
+import pytest
 
-
-# make a sample DF for all the tests
-df = dfmock.DFMock(count=10000)
-df.columns = {"string_options": {"option_count": 4, "option_type": "string"},
-              "int_options": {"option_count": 4, "option_type": "int"},
-              "datetime_options": {"option_count": 5, "option_type": "datetime"},
-              "float_options": {"option_count": 2, "option_type": "float"},
-              "metrics": "integer"
-              }
-df.generate_dataframe()
+from s3parq.fetch_parq import fetch
+from s3parq.publish_parq import publish
+from s3parq.testing_helper import df_equal_by_set, sorted_dfs_equal_by_pandas_testing
 
 
 @moto.mock_s3
 def test_end_to_end():
-    s3_client = boto3.client('s3')
+    # make a sample DF for all the tests
+    df = dfmock.DFMock(count=10000)
+    df.columns = {"string_options": {"option_count": 4, "option_type": "string"},
+                "int_options": {"option_count": 4, "option_type": "int"},
+                "datetime_options": {"option_count": 5, "option_type": "datetime"},
+                "float_options": {"option_count": 2, "option_type": "float"},
+                "metrics": "integer"
+                }
+    df.generate_dataframe()
 
+    s3_client = boto3.client('s3')
     bucket_name = 'thistestbucket'
     key = 'thisdataset'
-
     s3_client.create_bucket(Bucket=bucket_name)
+
+    old_df = pd.DataFrame(df.dataframe)
 
     # pub it
     publish(
         bucket=bucket_name,
         key=key,
-        dataframe=df.dataframe,
+        dataframe=old_df,
         partitions=['string_options', 'datetime_options', 'float_options']
     )
 
@@ -44,27 +44,7 @@ def test_end_to_end():
         parallel=False
     )
 
-    assert fetched_df.shape == df.dataframe.shape
-    pd.DataFrame.eq(fetched_df, df.dataframe)
-    fetched_df.head()
-
-@moto.mock_s3
-def test_via_public_interface():
-    s3_client = boto3.client('s3')
-    bucket_name = 'another-bucket'
-    key = 'testing/is/fun/dataset-name'
-    s3_client.create_bucket(Bucket=bucket_name)
-
-    publish(bucket=bucket_name,
-                key=key,
-                dataframe=df.dataframe,
-                partitions=['datetime_options'])
-
-    ## moto explodes when we use parallel :( need to test this with a real boto call
-    result = fetch(bucket=bucket_name,
-                        key=key,
-                        parallel=False
-                        )
-    assert result.shape == df.dataframe.shape
-    assert df_equal_by_set(result, df.dataframe, df.dataframe.columns.tolist())
+    assert fetched_df.shape == old_df.shape
+    assert df_equal_by_set(fetched_df, old_df, old_df.columns)
+    sorted_dfs_equal_by_pandas_testing(fetched_df, old_df)
 
