@@ -1,15 +1,24 @@
 from s3parq.session_helper import SessionHelper
 from sqlalchemy import Column, Integer, String
-import logging, re
+import logging
+import re
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-def _is_reserved_keyword(name: str):
+
+def _is_reserved_keyword(name: str) -> bool:
+    """ Returns bool of whether the uppercased name is reserved in Redshift
+    NOTE: This is backwards to expected by name (if _is_reserved_keyword , its fine)
+    """
     reserved = "AES128 AES256 ALL ALLOWOVERWRITE ANALYSE ANALYZE AND ANY ARRAY AS ASC AUTHORIZATION BACKUP BETWEEN BINARY BLANKSASNULL BOTH BYTEDICT BZIP2 CASE CAST CHECK COLLATE COLUMN CONSTRAINT CREATE CREDENTIALS CROSS CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP CURRENT_USER CURRENT_USER_ID DEFAULT DEFERRABLE DEFLATE DEFRAG DELTA DELTA32K DESC DISABLE DISTINCT DO ELSE EMPTYASNULL ENABLE ENCODE ENCRYPT ENCRYPTION END EXCEPT EXPLICIT FALSE FOR FOREIGN FREEZE FROM FULL GLOBALDICT256 GLOBALDICT64K GRANT GROUP GZIP HAVING IDENTITY IGNORE ILIKE IN INITIALLY INNER INTERSECT INTO IS ISNULL JOIN LANGUAGE LEADING LEFT LIKE LIMIT LOCALTIME LOCALTIMESTAMP LUN LUNS LZO LZOP MINUS MOSTLY13 MOSTLY32 MOSTLY8 NATURAL NEW NOT NOTNULL NULL NULLS OFF OFFLINE OFFSET OID OLD ON ONLY OPEN OR ORDER OUTER OVERLAPS PARALLEL PARTITION PERCENT PERMISSIONS PLACING PRIMARY RAW READRATIO RECOVER REFERENCES RESPECT REJECTLOG RESORT RESTORE RIGHT SELECT SESSION_USER SIMILAR SNAPSHOT SOME SYSDATE SYSTEM TABLE TAG TDES TEXT255 TEXT32K THEN TIMESTAMP TO TOP TRAILING TRUE TRUNCATECOLUMNS UNION UNIQUE USER USING VERBOSE WALLET WHEN WHERE WITH WITHOUT".split()
     return not(name.upper() in reserved)
 
-def _validate_name(name: str):
+
+def _validate_name(name: str) -> tuple:
+    """ Returns tuple, of which the first index indicates if the name is valid,
+    and the second is the error message of why it is invalid if so
+    """
     if not _is_reserved_keyword(name):
         return tuple([False, f'name: {name} cannot be a reserved SQL keyword'])
     elif not bool(re.match(r"^[a-zA-Z0-9_]", name)):
@@ -21,11 +30,22 @@ def _validate_name(name: str):
     else:
         return tuple([True, None])
 
-def _redshift_name_validator(*args):
+
+def _redshift_name_validator(*args) -> None:
+    """ Passes a list of args through name validation
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: Uses internal validate_name function and raises error based
+            on failure reasons
+    """
     for arg in args:
         response = _validate_name(arg)
         if not response[0]:
             raise ValueError(response[1])
+
 
 def _get_partitions_for_spectrum(filename: str) -> [str]:
     '''
@@ -93,7 +113,7 @@ def _last_index_containing_substring(the_list: [str], substring: str) -> int:
         ----
         Returns:
             i = 3
-        
+
     '''
     for s in reversed(the_list):
         if substring in s:
@@ -117,7 +137,8 @@ def _get_partition_location(filepath: str):
     '''
     separate_dirs = filepath.split('/')
     last_partition = _last_index_containing_substring(separate_dirs, "=")
-    final_set = separate_dirs[:-last_partition + 1] #  I think this is more confusing than it has to be
+    # I think this is more confusing than it has to be
+    final_set = separate_dirs[:-last_partition + 1]
     final_path = '/'.join(final_set)
     if final_path == '':
         raise ValueError(f'No partitions in this filepath {filepath}')
@@ -151,13 +172,22 @@ def _datatype_mapper(columns: dict) -> dict:
         elif dtype == 'bool':
             dtypes[col] = 'BOOLEAN'
         else:
-            raise ValueError(f"Error: {dtype} is not a datatype which can be mapped to Redshift.")
+            raise ValueError(
+                f"Error: {dtype} is not a datatype which can be mapped to Redshift.")
         sql_statement += f'{col} {dtypes[col]}, '
-    return f"({sql_statement[:-2]})" # Slice off the last space and comma
+    return f"({sql_statement[:-2]})"  # Slice off the last space and comma
 
-def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper):
-    """Creates a schema in AWS redshift using a given iam_role. The schema is named schema_name and belongs to the (existing) Redshift db db_name.
-        iam_role is a link to an existing AWS IAM Role with Redshift Spectrum write permissions."""
+
+def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper) -> None:
+    """ Creates a schema in AWS redshift using a given iam_role
+
+    Args:
+        schema_name (str): Name of the schema to create in Redshift Spectrum
+        db_name (str): (Existing) database that the schema should belong to
+        iam_role (str): link to an existing AWS IAM Role with Redshift Spectrum 
+            write permissions
+        session_helper (str): Active and configured session_helper session to use
+    """
     _redshift_name_validator(schema_name, db_name)
     with session_helper.db_session_scope() as scope:
         new_schema_query = f"CREATE EXTERNAL SCHEMA IF NOT EXISTS {schema_name} \
@@ -168,16 +198,21 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
         logger.info(f'Running query to create schema: {new_schema_query}')
         scope.execute(new_schema_query)
 
-def create_table(table_name: str, schema_name: str, columns: dict, partitions: dict, path: str, session_helper: SessionHelper):
-    """
-    Creates a table in AWS redshift. The table will be named schema_name.table_name and belong to the (existing) Redshift db db_name.
+
+def create_table(table_name: str, schema_name: str, columns: dict, partitions: dict, path: str, session_helper: SessionHelper) -> None:
+    """ Creates a table in AWS redshift. The table will be named 
+    schema_name.table_name and belong to the (existing) Redshift db db_name
+
     Args:
-        table_name: name of created table. NOTE: THIS WILL ERROR IF table_name ALREADY EXISTS IN REDSHIFT
-        schema_name: name of schema in redshift. Schema must be external and already exist!
-        columns: Dictionary with keys corresponding to column names and values corresponding to pandas dtypes, excluding partition columns.
-        partitions: Dict similar to columns, except ONLY with partition columns
-        path: Path to published contract in s3 (excluding partitions)
-        session_helper: Instance of Redshift s3parq.session_helper
+        table_name (str): name of created table
+            NOTE: THIS WILL ERROR IF table_name ALREADY EXISTS IN REDSHIFT
+        schema_name (str): name of schema in redshift; Schema must be external 
+            and already exist!
+        columns (dict): Dictionary with keys corresponding to column names and 
+            values corresponding to pandas dtypes, excluding partition columns
+        partitions (dict): Dict similar to columns, except ONLY with partition columns
+        path (str): Path to published dataset in s3 (excluding partitions)
+        session_helper (SessionHelper): Instance of Redshift s3parq.session_helper
     """
     _redshift_name_validator(table_name)
     redshift_columns = _datatype_mapper(columns)
@@ -185,7 +220,8 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
     with session_helper.db_session_scope() as scope:
         if_exists_query = f'SELECT EXISTS(SELECT schemaname, tablename FROM SVV_EXTERNAL_TABLES WHERE tablename=\'{table_name}\' AND schemaname=\'{schema_name}\');'
         table_exists = scope.execute(if_exists_query).first()[0]
-        if table_exists: return
+        if table_exists:
+            return
 
         if not partitions:
             new_schema_query = (
@@ -202,26 +238,87 @@ def create_table(table_name: str, schema_name: str, columns: dict, partitions: d
         logger.info(f'Running query to create table: {new_schema_query}')
         scope.execute(new_schema_query)
 
-def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> str:
-    '''
-    Generates partitioning SQL
+def create_custom_table(table_name: str, schema_name: str, partitions: dict, path: str, custom_redshift_columns: dict, session_helper: SessionHelper) -> None:
+    """ Creates a table in AWS redshift. The table will be named 
+    schema_name.table_name and belong to the (existing) Redshift db db_name.
+    The created table will use the CUSTOM redshift column data types defined 
+    in custom_redshift_columns.
+
+    Args:
+        table_name (str): name of created table
+            NOTE: THIS WILL ERROR IF table_name ALREADY EXISTS IN REDSHIFT
+        schema_name (str): name of schema in redshift; Schema must be external 
+            and already exist!
+        partitions (dict): Dict similar to columns, except ONLY with partition columns
+        path (str): Path to published dataset in s3 (excluding partitions)
+        custom_redshift_columns (dict): 
+            This dictionary contains custom column data type definitions for redshift.
+            The params should be formatted as follows:
+                - column name (str)
+                - data type (str)
+        session_helper (SessionHelper): Instance of Redshift s3parq.session_helper
+    """
+
+    logger.info("Running create_custom_table...")
+
+    _redshift_name_validator(table_name)
+
+    logger.info("Generating create columns sql statement with custom redshift columns...")
+    logger.info("Generating create partitions sql statement with custom redshift columns...")
+    redshift_columns_sql = ""
+    redshift_partitions_sql = ""
+    for k, v in custom_redshift_columns.items():
+        if k in partitions:
+            redshift_partitions_sql += f'{k} {v}, '
+        else:
+            redshift_columns_sql += f'{k} {v}, '
+    redshift_columns = f"({redshift_columns_sql[:-2]})"  # Slice off the last space and comma
+    redshift_partitions = f"({redshift_partitions_sql[:-2]})"  # Slice off the last space and comma
+
+    with session_helper.db_session_scope() as scope:
+        if_exists_query = f'SELECT EXISTS(SELECT schemaname, tablename FROM SVV_EXTERNAL_TABLES WHERE tablename=\'{table_name}\' AND schemaname=\'{schema_name}\');'
+        table_exists = scope.execute(if_exists_query).first()[0]
+        if table_exists:
+            return
+
+        if not partitions:
+            new_schema_query = (
+                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
+                STORED AS PARQUET \
+                LOCATION \'{path}\';'
+            )
+        else:
+            new_schema_query = (
+                f'CREATE EXTERNAL TABLE {schema_name}.{table_name} {redshift_columns} \
+                PARTITIONED BY {redshift_partitions} STORED AS PARQUET \
+                LOCATION \'{path}\';'
+            )
+        logger.info(f'Running query to create table: {new_schema_query}')
+        scope.execute(new_schema_query)
+
+
+def create_partitions(bucket: str, schema: str, table: str, filepath: str, session_helper: SessionHelper) -> None:
+    ''' Executes the SQL that creates partitions on the given table for an 
+    individual file
+
     Args:
         bucket (str): S3 bucket where data is stored
         schema (str): name of redshift schema (must already exist)
         table (str): name of table in schema.  Must have partitions scoped out in `CREATE TABLE ...`
         filepath (str): path to data in S3 that will be queryable by it's partitions
-    ----
+            NOTE: This is to the single parquet file, including the partitions
+        session_helper (SessionHelper): a configured s3parq.session_helper.SessionHelper session
+
     Returns:
-        query (str): a raw SQL string that adds the partitioned data to the table
-    --------
+        None
+
     Example:
         Args:
             bucket = 'MyBucket'
             schema = 'MySchema'
             table = 'MyTable'
             filepath = 'path/to/data/apple=abcd/banana=1234/abcd1234.parquet'
-        Returns:
-            "ALTER TABLE MySchema.MyTable               ADD PARTITION (apple='abcd' ,banana='1234')               LOCATION 's3://MyBucket/path/to/data/apple=abcd';"
+            session_helper = some_configured_session
     '''
     partitions = _get_partitions_for_spectrum(filepath)
     formatted_partitions = _format_partition_strings_for_sql(partitions)
@@ -232,4 +329,4 @@ def create_partitions(bucket: str, schema: str, table: str, filepath: str, sessi
             ADD IF NOT EXISTS PARTITION ({', '.join(formatted_partitions)}) \
             LOCATION 's3://{bucket}/{path_to_data}';"
         logger.info(f'Running query to create: {partitions_query}')
-        scope.execute(partitions_query)    
+        scope.execute(partitions_query)
