@@ -325,7 +325,13 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
         elif dtype.startswith('int64'):
             pa_type = pa.int64()
         elif dtype.startswith('int8'):
-            pa_type = pa.int8()    
+            pa_type = pa.int8()  
+        elif dtype.startswith('Int32'):
+            dataframe[col] = dataframe.astype({col: 'object'})
+            pa_type = pa.int32()
+        elif dtype.startswith('Int64'):
+            dataframe[col] = dataframe.astype({col: 'object'})
+            pa_type = pa.int64()
         elif dtype.startswith('float32'):
             pa_type = pa.float32()
         elif dtype.startswith('float64'):
