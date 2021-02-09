@@ -122,6 +122,9 @@ Use the `custom_publish` function with a `custom_redshift_columns` dictionary to
 
 ## Changelog
 
+### 2.1.11
+- Added support for Pandas Int32 and Int64 data types. 
+
 ### 2.1.9
 - Added custom_publish function to publish_parq which allows spectrum and redshift tables to
 use custom user defined redshift column definitions.
