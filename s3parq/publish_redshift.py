@@ -178,7 +178,7 @@ def _datatype_mapper(columns: dict) -> dict:
     return f"({sql_statement[:-2]})"  # Slice off the last space and comma
 
 
-def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper) -> None:
+def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper: SessionHelper, read_access_user=None) -> None:
     """ Creates a schema in AWS redshift using a given iam_role
 
     Args:
@@ -197,6 +197,13 @@ def create_schema(schema_name: str, db_name: str, iam_role: str, session_helper:
 
         logger.info(f'Running query to create schema: {new_schema_query}')
         scope.execute(new_schema_query)
+
+        if read_access_user:
+            grant_access_query = f"GRANT USAGE ON SCHEMA {schema_name} TO {read_access_user};\
+                GRANT SELECT ON ALL TABLES IN SCHEMA {schema_name} TO {read_access_user};\
+                ALTER DEFAULT PRIVILEGES IN SCHEMA {schema_name} GRANT SELECT ON TABLES TO {read_access_user};"
+            logger.info(f'Running query to grant access to schema: {grant_access_query}')
+            scope.execute(grant_access_query)
 
 
 def create_table(table_name: str, schema_name: str, columns: dict, partitions: dict, path: str, session_helper: SessionHelper) -> None:
