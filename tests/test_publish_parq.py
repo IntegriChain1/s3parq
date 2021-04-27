@@ -285,7 +285,7 @@ class Test:
                      dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
         mock_create_schema.assert_called_once_with(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh, None)
 
     @patch('s3parq.publish_redshift.create_table')
     @patch('s3parq.publish_parq.SessionHelper')
@@ -375,7 +375,7 @@ class Test:
                      custom_redshift_columns=custom_redshift_columns)
 
         mock_create_schema.assert_called_once_with(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh, None)
 
     @patch('s3parq.publish_redshift.create_custom_table')
     @patch('s3parq.publish_parq.SessionHelper')

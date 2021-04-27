@@ -459,7 +459,7 @@ ideal size: {ideal_size} bytes
         yield {'lower': lower, 'upper': upper}
 
 
-def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, redshift_params: dict = None) -> List[str]:
+def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, redshift_params: dict = None, read_access_user: str =None) -> List[str]:
     """ Dataframe to S3 Parquet Publisher
     This function handles the portion of work that will see a dataframe converted
     to parquet and then published to the given S3 location.
@@ -513,7 +513,7 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
 
         session_helper.configure_session_helper()
         publish_redshift.create_schema(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper, read_access_user)
         logger.debug(
             f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
 
@@ -553,7 +553,7 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
 
     return files
 
-def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, custom_redshift_columns: dict, redshift_params: dict = None) -> List[str]:
+def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, custom_redshift_columns: dict, redshift_params: dict = None, read_access_user: str =None) -> List[str]:
     """ Dataframe to S3 Parquet Publisher with a CUSTOM redshift column definition.
     Custom publish allows custom defined redshift column definitions to be used and 
     enables support for Redshift's decimal data type. 
@@ -618,7 +618,7 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
 
         session_helper.configure_session_helper()
         publish_redshift.create_schema(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper, read_access_user)
         logger.debug(
             f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
 
