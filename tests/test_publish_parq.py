@@ -47,7 +47,8 @@ class Test:
             'host': 'hamburger_host',
             'port': '9999',
             'db_name': 'hamburger_db',
-            'ec2_user': 'hamburger_aws'
+            'ec2_user': 'hamburger_aws',
+            'read_access_user': 'some_read_only_user'
         }
 
         return redshift_params
@@ -285,7 +286,7 @@ class Test:
                      dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
         mock_create_schema.assert_called_once_with(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh, None)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh, redshift_params['read_access_user'])
 
     @patch('s3parq.publish_redshift.create_table')
     @patch('s3parq.publish_parq.SessionHelper')
@@ -375,7 +376,7 @@ class Test:
                      custom_redshift_columns=custom_redshift_columns)
 
         mock_create_schema.assert_called_once_with(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh, None)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh, redshift_params['read_access_user'])
 
     @patch('s3parq.publish_redshift.create_custom_table')
     @patch('s3parq.publish_parq.SessionHelper')
