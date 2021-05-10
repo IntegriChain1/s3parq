@@ -110,6 +110,7 @@ def validate_redshift_params(redshift_params: dict) -> dict:
                 - port (str): Redshift Spectrum port to use
                 - db_name (str): Redshift Spectrum database name to use
                 - ec2_user (str): If on ec2, the user that should be used
+                - read_access_user (str): Name of user getting READ access on a schema
 
     Returns:
         The given redshift_params, with table and schema names lowercase
@@ -120,7 +121,7 @@ def validate_redshift_params(redshift_params: dict) -> dict:
         ValueError: If redshift_params is missing any of the above attributes
     """
     expected_params = ["schema_name", "table_name", "iam_role",
-                       "region", "cluster_id", "host", "port", "db_name", "ec2_user"]
+                       "region", "cluster_id", "host", "port", "db_name", "ec2_user", "read_access_user"]
     logger.debug("Checking redshift params are correctly formatted")
     if len(redshift_params) != len(expected_params):
         params_length_message = f"Expected parameters: {len(expected_params)}. Received: {len(redshift_params)}"
@@ -513,7 +514,7 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
 
         session_helper.configure_session_helper()
         publish_redshift.create_schema(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper, redshift_params['read_access_user'])
         logger.debug(
             f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
 
@@ -618,7 +619,7 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
 
         session_helper.configure_session_helper()
         publish_redshift.create_schema(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper)
+            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], session_helper, redshift_params['read_access_user'])
         logger.debug(
             f"Schema {redshift_params['schema_name']} created. Creating table {redshift_params['table_name']}...")
 

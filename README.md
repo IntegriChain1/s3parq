@@ -77,6 +77,12 @@ A lot of pre-filtering involves trimming down your dataset based on the values a
                                                 key,
                                                 partition)
 
+## To Test
+```
+bash dev_env --build
+pytest tests/
+```
+
 ## Redshift Spectrum
 Dataframes published to S3 can optionally be queried in AWS Redshift Spectrum. To enable this functionality, you must have an external database configured in Redshift. See the [AWS docs](https://docs.aws.amazon.com/redshift/latest/dg/c-using-spectrum.html) for help setting up a database in Redshift. To enable this functionality in S3parq, simply pass a dictionary of configurations to `publish()` via the redshift_params argument.
 
