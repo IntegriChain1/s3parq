@@ -64,7 +64,7 @@ def get_all_partition_values(bucket: str, key: str, partition: str) -> iter:
         return []
 
     partition_dtype = _get_partitions_and_types(
-        first_file_key=all_files[0], bucket=bucket)[partition]
+        objects_in_bucket=all_files, bucket=bucket)[partition]
     partition_values = _parse_partitions_and_values(all_files, key=key)[
         partition]
     return [convert_type(val, partition_dtype) for val in partition_values]
@@ -98,7 +98,7 @@ def get_diff_partition_values(bucket: str, key: str, partition: str, values_to_d
             return []
 
     partition_dtype = _get_partitions_and_types(
-        first_file_key=all_files[0], bucket=bucket)[partition]
+        objects_in_bucket=all_files, bucket=bucket)[partition]
     partition_values = _parse_partitions_and_values(all_files, key=key)[
         partition]
 
@@ -138,7 +138,7 @@ def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
         return None
 
     partition_dtype = _get_partitions_and_types(
-        first_file_key=all_files[0], bucket=bucket)[partition]
+        objects_in_bucket=all_files, bucket=bucket)[partition]
     partition_values = _parse_partitions_and_values(
         file_paths=all_files, key=key)[partition]
 
@@ -189,7 +189,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
         logger.debug(f"No files present under : {key} :, returning empty DataFrame")
         return pd.DataFrame()
 
-    partition_metadata = _get_partitions_and_types(all_files[0], bucket)
+    partition_metadata = _get_partitions_and_types(all_files, bucket)
 
     if partition_metadata is None:
         if accept_not_s3parq:
@@ -208,7 +208,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
         partition_values, partition_metadata)
 
     # filtered_paths is a list of the S3 prefixes from which we want to load data
-    filtered_paths = _get_filtered_key_list(typed_values, filters, key)
+    filtered_paths = _get_filtered_key_list(all_files, typed_values, filters, key)
 
     files_to_load = []
 
@@ -221,7 +221,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
     # with correct headers and type
     if len(files_to_load) < 1:
         logger.debug(f"Dataset filters left no matching values, returning empty dataframe with matching headers")
-        sacrifical_files = [all_files[0]]
+        sacrifical_files = [all_files[-1]]
         sacrifical_frame = _get_filtered_data(
             bucket=bucket, paths=sacrifical_files, partition_metadata=partition_metadata, parallel=parallel)
         return sacrifical_frame.head(0)
@@ -347,14 +347,14 @@ def get_all_files_list(bucket: str, key: str) -> list:
         if not "Contents" in page.keys():
             break
 
-        for item in page['Contents']:
+        for item in sorted(page['Contents'], key=lambda k: k['LastModified']):
             if item['Key'].endswith('.parquet'):
                 objects_in_bucket.append(item['Key'])
 
     return objects_in_bucket
 
 
-def _get_partitions_and_types(first_file_key: str, bucket: str) -> dict:
+def _get_partitions_and_types(objects_in_bucket: List[str], bucket: str) -> dict:
     """ Fetch a list of all the partitions actually there and their 
     datatypes. List may be different than passed list if not being used
     for filtering on.
@@ -371,21 +371,24 @@ def _get_partitions_and_types(first_file_key: str, bucket: str) -> dict:
     TODO
     """
     s3_client = boto3.client('s3')
+    
+    partition_metadata = {}
 
-    first_file = s3_client.head_object(
-        Bucket=bucket,
-        Key=first_file_key
-    )
+    for file_key in objects_in_bucket:
+        file = s3_client.head_object(
+            Bucket=bucket,
+            Key=file_key
+        )
 
-    metadata = first_file['Metadata']
-    partition_metadata_raw = metadata.get("partition_data_types", None)
+        metadata = file['Metadata']
+        partition_metadata_raw = metadata.get("partition_data_types", None)
 
-    if partition_metadata_raw is None:
+        partition_metadata.update(ast.literal_eval(partition_metadata_raw))
+
+    if not partition_metadata:
         return None
-
-    partition_metadata = ast.literal_eval(partition_metadata_raw)
-
-    return partition_metadata
+    else:
+        return partition_metadata
 
 
 def _parse_partitions_and_values(file_paths: List[str], key: str) -> dict:
@@ -401,7 +404,7 @@ def _parse_partitions_and_values(file_paths: List[str], key: str) -> dict:
     # TODO: find more neat/efficient way to do this
     parts = OrderedDict()
     key_len = len(key)
-    for file_path in file_paths:
+    for file_path in reversed(file_paths):
         # Delete key, split the parts out, delete the file name
         file_path = file_path[key_len:]
         unparsed_parts = file_path.split("/")
@@ -447,7 +450,7 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict) -> dic
     return parsed_parts
 
 
-def _get_filtered_key_list(typed_parts: dict, filters: List[type(Filter)], key: str) -> List[str]:
+def _get_filtered_key_list(file_paths: List[str], typed_parts: dict, filters: List[type(Filter)], key: str) -> List[str]:
     """ Create list of all "paths" to files after the filtered partitions
     are set ie all non-matching partitions are excluded.
 
@@ -459,7 +462,7 @@ def _get_filtered_key_list(typed_parts: dict, filters: List[type(Filter)], key: 
     Returns:
         A list of object keys that have been filtered by partition values
     """
-    filter_keys = []
+    filter_keys = file_paths
     matched_parts = OrderedDict()
     matched_parts.keys = typed_parts.keys()
     matched_part_vals = set()
@@ -472,30 +475,9 @@ def _get_filtered_key_list(typed_parts: dict, filters: List[type(Filter)], key: 
             for v in fil['values']:
                 for x in part_values:
                     if comparison(x, v):
-                        matched_part_vals.add(x)
-            matched_parts[part] = matched_part_vals.copy()
-        else:
-            matched_parts[part] = part_values
+                        filter_keys = [f for f in filter_keys if str(str(fil['partition']) + "=" + str(x)) in f]
 
-    def construct_paths(matched_parts, previous_fil_keys: List[str]) -> None:
-        if len(matched_parts) > 0:
-            part = matched_parts.popitem(last=False)
-            new_filter_keys = list()
-            for value in part[1]:
-                mapped_keys = list(map(
-                    (lambda x: str(x) +
-                     str(part[0]) + "=" + str(value) + "/"),
-                    previous_fil_keys
-                ))
-                new_filter_keys = new_filter_keys + mapped_keys
-
-            construct_paths(matched_parts, new_filter_keys)
-        else:
-            filter_keys.append(previous_fil_keys)
-
-    construct_paths(matched_parts, [f"{key}/"])
-    # TODO: fix the below mess with random array
-    return filter_keys[0]
+    return filter_keys
 
 
 def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, parallel: bool = True) -> pd.DataFrame:
@@ -516,7 +498,7 @@ def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, 
     """
 
     temp_frames = []
-
+    
     def append_to_temp(frame: pd.DataFrame):
         temp_frames.append(frame)
 
