@@ -106,10 +106,13 @@ def test_get_data_types_from_s3():
     bucket, parquet_paths = setup_partitioned_parquet()
 
     s3_client = boto3.client('s3')
+    file_lst = []
     files = s3_client.list_objects_v2(Bucket=bucket)
-    first_file_key = files["Contents"][0]["Key"]
-    partition_metadata = fetch_parq._get_partitions_and_types(
-        first_file_key, bucket)
+    files = s3_client.list_objects_v2(Bucket=bucket)
+    for x in files["Contents"]:
+        file_lst += [x["Key"]]
+    partition_metadata = _get_partitions_and_types(
+        file_lst, bucket)
 
     assert partition_metadata == {
         "string_col": "string",
