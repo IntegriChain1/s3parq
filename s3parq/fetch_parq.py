@@ -382,8 +382,9 @@ def _get_partitions_and_types(objects_in_bucket: List[str], bucket: str) -> dict
 
         metadata = file['Metadata']
         partition_metadata_raw = metadata.get("partition_data_types", None)
-
-        partition_metadata.update(ast.literal_eval(partition_metadata_raw))
+        
+        if partition_metadata_raw:
+            partition_metadata.update(ast.literal_eval(partition_metadata_raw))
 
     if not partition_metadata:
         return None
