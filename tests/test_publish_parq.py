@@ -7,6 +7,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 import s3fs
+import contextlib
+import moto
 
 import s3parq.publish_parq as parq
 from s3parq.testing_helper import (
@@ -17,10 +19,15 @@ from s3parq.testing_helper import (
 )
 
 
-@mock_s3
+@contextlib.contextmanager
+def get_s3_client():
+    with moto.mock_s3():
+        yield boto3.client('s3')
+
+
 class Test:
     """ Test class for testing out publish_parq
-    Unlike fetch, this functionality is encompassible in one file, with just a 
+    Unlike fetch, this functionality is encompassible in one file, with just a
     few sections.
     """
 
@@ -28,11 +35,10 @@ class Test:
     Setup helpers
     '''
 
-    def setup_s3(self):
+    def setup_s3(self, s3_client):
         bucket = setup_random_string()
         key = setup_random_string()
 
-        s3_client = boto3.client('s3')
         s3_client.create_bucket(Bucket=bucket)
 
         return bucket, key
@@ -61,13 +67,14 @@ class Test:
         assert parq._check_partition_compatibility("all") is False
 
     def test_generates_partitions_in_order(self):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = dataframe.columns[:2]
-        with patch('s3parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
-            parq._gen_parquet_to_s3(bucket, key, dataframe, partitions)
-            arg, kwarg = mock_method.call_args
-            assert (kwarg['partition_cols'] == partitions).all()
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = dataframe.columns[:2]
+            with patch('s3parq.publish_parq.pq.write_to_dataset', return_value=None) as mock_method:
+                parq._gen_parquet_to_s3(bucket, key, dataframe, partitions)
+                arg, kwarg = mock_method.call_args
+                assert (kwarg['partition_cols'] == partitions).all()
 
     def test_df_datatypes(self):
         dataframe = setup_grouped_dataframe()
@@ -107,124 +114,137 @@ class Test:
             parq.check_partitions(('banana',), dataframe)
 
     def test_reject_empty_dataframe(self):
-        dataframe = pd.DataFrame()
-        bucket, key = self.setup_s3()
-        s3_path = f"s3://{bucket}/{key}"
+        with get_s3_client() as s3_client:
+            dataframe = pd.DataFrame()
+            bucket, key = self.setup_s3(s3_client)
+            s3_path = f"s3://{bucket}/{key}"
 
-        with pytest.raises(ValueError):
-            parq.publish(bucket=bucket, key=key,
-                         dataframe=dataframe, partitions=[])
+            with pytest.raises(ValueError):
+                parq.publish(bucket=bucket, key=key,
+                             dataframe=dataframe, partitions=[])
 
     def test_reject_timedelta_dataframes(self):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = ['text_col']
-        dataframe['time_col'] = pd.Timedelta('1 days')
-        with pytest.raises(NotImplementedError):
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = ['text_col']
+            dataframe['time_col'] = pd.Timedelta('1 days')
+            with pytest.raises(NotImplementedError):
+                parq.publish(bucket=bucket, key=key,
+                             dataframe=dataframe, partitions=partitions)
+
+    def test_works_without_partitions(self):
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = []
             parq.publish(bucket=bucket, key=key,
                          dataframe=dataframe, partitions=partitions)
 
-    def test_works_without_partitions(self):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = []
-        parq.publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions)
-
     def test_input_equals_output(self):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        s3_path = f"s3://{bucket}/{key}"
-        partitions = [dataframe.columns[0]]
-        parq.publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions)
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            s3_path = f"s3://{bucket}/{key}"
+            partitions = [dataframe.columns[0]]
+            parq.publish(bucket=bucket, key=key,
+                         dataframe=dataframe, partitions=partitions)
 
-        from_s3 = pq.ParquetDataset(s3_path, filesystem=s3fs.S3FileSystem())
-        s3pd = from_s3.read().to_pandas()
-        # Switch partition type back -> by default it gets set to a category
-        s3pd[partitions[0]] = s3pd[partitions[0]].astype(
-            dataframe[partitions[0]].dtype)
+            from_s3 = pq.ParquetDataset(
+                s3_path, filesystem=s3fs.S3FileSystem())
+            s3pd = from_s3.read().to_pandas()
+            # Switch partition type back -> by default it gets set to a category
+            s3pd[partitions[0]] = s3pd[partitions[0]].astype(
+                dataframe[partitions[0]].dtype)
 
-        sorted_dfs_equal_by_pandas_testing(dataframe, s3pd)
+            sorted_dfs_equal_by_pandas_testing(dataframe, s3pd)
 
     def test_set_metadata_correctly(self):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        s3_client = boto3.client('s3')
-        partitions = ['string_col', 'int_col', 'bool_col']
-        parq.publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions)
-        for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
-            if obj['Key'].endswith(".parquet"):
-                meta = s3_client.get_object(
-                    Bucket=bucket, Key=obj['Key'])['Metadata']
-                assert meta['partition_data_types'] == str(
-                    {"string_col": "string", "int_col": "integer", "bool_col": "boolean"})
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            s3_client = boto3.client('s3')
+            partitions = ['string_col', 'int_col', 'bool_col']
+            parq.publish(bucket=bucket, key=key,
+                         dataframe=dataframe, partitions=partitions)
+            for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
+                if obj['Key'].endswith(".parquet"):
+                    meta = s3_client.get_object(
+                        Bucket=bucket, Key=obj['Key'])['Metadata']
+                    assert meta['partition_data_types'] == str(
+                        {"string_col": "string", "int_col": "integer", "bool_col": "boolean"})
 
     '''
     External custom publish functionality tests
     '''
-    def test_custom_publish_reject_empty_dataframe(self):
-        dataframe = pd.DataFrame()
-        custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()[1]
-        bucket, key = self.setup_s3()
-        s3_path = f"s3://{bucket}/{key}"
 
-        with pytest.raises(ValueError):
-            parq.custom_publish(bucket=bucket, key=key,
-                         dataframe=dataframe, partitions=[], 
-                         custom_redshift_columns=custom_redshift_columns)
+    def test_custom_publish_reject_empty_dataframe(self):
+        with get_s3_client() as s3_client:
+            dataframe = pd.DataFrame()
+            custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()[
+                1]
+            bucket, key = self.setup_s3(s3_client)
+            s3_path = f"s3://{bucket}/{key}"
+
+            with pytest.raises(ValueError):
+                parq.custom_publish(bucket=bucket, key=key,
+                                    dataframe=dataframe, partitions=[],
+                                    custom_redshift_columns=custom_redshift_columns)
 
     def test_custom_publish_reject_timedelta_dataframes(self):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = ['colA']
-        dataframe['time_col'] = pd.Timedelta('1 days')
-        with pytest.raises(NotImplementedError):
-            parq.custom_publish(bucket=bucket, key=key,
-                         dataframe=dataframe, partitions=partitions,
-                         custom_redshift_columns=custom_redshift_columns)
-
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = ['colA']
+            dataframe['time_col'] = pd.Timedelta('1 days')
+            with pytest.raises(NotImplementedError):
+                parq.custom_publish(bucket=bucket, key=key,
+                                    dataframe=dataframe, partitions=partitions,
+                                    custom_redshift_columns=custom_redshift_columns)
 
     def test_custom_publish_works_without_partitions(self):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = []
-        parq.custom_publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions,
-                     custom_redshift_columns=custom_redshift_columns)
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = []
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions,
+                                custom_redshift_columns=custom_redshift_columns)
 
     def test_custom_publish_input_equals_output(self):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        s3_path = f"s3://{bucket}/{key}"
-        partitions = [dataframe.columns[0]]
-        parq.custom_publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions,
-                     custom_redshift_columns=custom_redshift_columns)
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            s3_path = f"s3://{bucket}/{key}"
+            partitions = [dataframe.columns[0]]
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions,
+                                custom_redshift_columns=custom_redshift_columns)
 
-        from_s3 = pq.ParquetDataset(s3_path, filesystem=s3fs.S3FileSystem())
-        s3pd = from_s3.read().to_pandas()
-        # Switch partition type back -> by default it gets set to a category
-        s3pd[partitions[0]] = s3pd[partitions[0]].astype(
-            dataframe[partitions[0]].dtype)
+            from_s3 = pq.ParquetDataset(
+                s3_path, filesystem=s3fs.S3FileSystem())
+            s3pd = from_s3.read().to_pandas()
+            # Switch partition type back -> by default it gets set to a category
+            s3pd[partitions[0]] = s3pd[partitions[0]].astype(
+                dataframe[partitions[0]].dtype)
 
-        sorted_dfs_equal_by_pandas_testing(dataframe, s3pd)
+            sorted_dfs_equal_by_pandas_testing(dataframe, s3pd)
 
     def test_custom_publish_set_metadata_correctly(self):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        s3_client = boto3.client('s3')
-        partitions = ['colA', 'colB', 'colC', 'colD', 'colF']
-        parq.custom_publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions,
-                     custom_redshift_columns=custom_redshift_columns)
-        for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
-            if obj['Key'].endswith(".parquet"):
-                meta = s3_client.get_object(
-                    Bucket=bucket, Key=obj['Key'])['Metadata']
-                assert meta['partition_data_types'] == str(
-                    {"colA": "string", "colB": "integer", "colC": "float", "colD": "decimal", "colF": "boolean"})
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            s3_client = boto3.client('s3')
+            partitions = ['colA', 'colB', 'colC', 'colD', 'colF']
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions,
+                                custom_redshift_columns=custom_redshift_columns)
+            for obj in s3_client.list_objects(Bucket=bucket)['Contents']:
+                if obj['Key'].endswith(".parquet"):
+                    meta = s3_client.get_object(
+                        Bucket=bucket, Key=obj['Key'])['Metadata']
+                    assert meta['partition_data_types'] == str(
+                        {"colA": "string", "colB": "integer", "colC": "float", "colD": "decimal", "colF": "boolean"})
 
     '''
     Tests related to Redshift Spectrum
@@ -259,169 +279,178 @@ class Test:
     # Test Schema Creator on Publish
     # TODO : is this necesarry?
     def test_no_redshift_publish(self):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = []
-        parq.publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions)
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = []
+            parq.publish(bucket=bucket, key=key,
+                         dataframe=dataframe, partitions=partitions)
 
     @patch('s3parq.publish_redshift.create_schema')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_schema_publish(self, mock_session_helper, mock_create_schema):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = [dataframe.columns[0]]
-        redshift_params = self.setup_redshift_params()
-        msh = mock_session_helper(
-            region=redshift_params['region'],
-            cluster_id=redshift_params['cluster_id'],
-            host=redshift_params['host'],
-            port=redshift_params['port'],
-            db_name=redshift_params['db_name']
-        )
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = [dataframe.columns[0]]
+            redshift_params = self.setup_redshift_params()
+            msh = mock_session_helper(
+                region=redshift_params['region'],
+                cluster_id=redshift_params['cluster_id'],
+                host=redshift_params['host'],
+                port=redshift_params['port'],
+                db_name=redshift_params['db_name']
+            )
 
-        msh.configure_session_helper()
-        parq.publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
+            msh.configure_session_helper()
+            parq.publish(bucket=bucket, key=key,
+                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
-        mock_create_schema.assert_called_once_with(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
+            mock_create_schema.assert_called_once_with(
+                redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
 
     @patch('s3parq.publish_redshift.create_table')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_table_publish(self, mock_session_helper, mock_create_table):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = ["text_col", "int_col", "float_col"]
-        redshift_params = self.setup_redshift_params()
-        msh = mock_session_helper(
-            region=redshift_params['region'],
-            cluster_id=redshift_params['cluster_id'],
-            host=redshift_params['host'],
-            port=redshift_params['port'],
-            db_name=redshift_params['db_name']
-        )
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = ["text_col", "int_col", "float_col"]
+            redshift_params = self.setup_redshift_params()
+            msh = mock_session_helper(
+                region=redshift_params['region'],
+                cluster_id=redshift_params['cluster_id'],
+                host=redshift_params['host'],
+                port=redshift_params['port'],
+                db_name=redshift_params['db_name']
+            )
 
-        msh.configure_session_helper()
-        parq.publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
+            msh.configure_session_helper()
+            parq.publish(bucket=bucket, key=key,
+                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
-        df_types = parq._get_dataframe_datatypes(dataframe, partitions)
-        partition_types = parq._get_dataframe_datatypes(
-            dataframe, partitions, True)
+            df_types = parq._get_dataframe_datatypes(dataframe, partitions)
+            partition_types = parq._get_dataframe_datatypes(
+                dataframe, partitions, True)
 
-        mock_create_table.assert_called_once_with(
-            redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
+            mock_create_table.assert_called_once_with(
+                redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
 
     @patch('s3parq.publish_redshift.create_table')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_table_publish_mixed_type_column(self, mock_session_helper, mock_create_table):
-        dataframe = setup_grouped_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = []
-        redshift_params = self.setup_redshift_params()
-        msh = mock_session_helper(
-            region=redshift_params['region'],
-            cluster_id=redshift_params['cluster_id'],
-            host=redshift_params['host'],
-            port=redshift_params['port'],
-            db_name=redshift_params['db_name']
-        )
+        with get_s3_client() as s3_client:
+            dataframe = setup_grouped_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = []
+            redshift_params = self.setup_redshift_params()
+            msh = mock_session_helper(
+                region=redshift_params['region'],
+                cluster_id=redshift_params['cluster_id'],
+                host=redshift_params['host'],
+                port=redshift_params['port'],
+                db_name=redshift_params['db_name']
+            )
 
-        msh.configure_session_helper()
+            msh.configure_session_helper()
 
-        dataframe.iat[5, dataframe.columns.get_loc("text_col")] = 45
+            dataframe.iat[5, dataframe.columns.get_loc("text_col")] = 45
 
-        parq.publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
+            parq.publish(bucket=bucket, key=key,
+                         dataframe=dataframe, partitions=partitions, redshift_params=redshift_params)
 
-        df_types = parq._get_dataframe_datatypes(dataframe, partitions)
-        partition_types = parq._get_dataframe_datatypes(
-            dataframe, partitions, True)
+            df_types = parq._get_dataframe_datatypes(dataframe, partitions)
+            partition_types = parq._get_dataframe_datatypes(
+                dataframe, partitions, True)
 
-        mock_create_table.assert_called_once_with(
-            redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
+            mock_create_table.assert_called_once_with(
+                redshift_params['table_name'], redshift_params['schema_name'], df_types, partition_types, parq.s3_url(bucket, key), msh)
 
     '''
     Tests related to Redshift Spectrum with custom publish
     '''
     # Test Schema Creator on Publish
+
     def test_custom_publish_no_redshift_publish(self):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = []
-        parq.custom_publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions,
-                     custom_redshift_columns=custom_redshift_columns)
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = []
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions,
+                                custom_redshift_columns=custom_redshift_columns)
 
     @patch('s3parq.publish_redshift.create_schema')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_custom_publish_schema_publish(self, mock_session_helper, mock_create_schema):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = [dataframe.columns[0]]
-        redshift_params = self.setup_redshift_params()
-        msh = mock_session_helper(
-            region=redshift_params['region'],
-            cluster_id=redshift_params['cluster_id'],
-            host=redshift_params['host'],
-            port=redshift_params['port'],
-            db_name=redshift_params['db_name']
-        )
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = [dataframe.columns[0]]
+            redshift_params = self.setup_redshift_params()
+            msh = mock_session_helper(
+                region=redshift_params['region'],
+                cluster_id=redshift_params['cluster_id'],
+                host=redshift_params['host'],
+                port=redshift_params['port'],
+                db_name=redshift_params['db_name']
+            )
 
-        msh.configure_session_helper()
-        parq.custom_publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
-                     custom_redshift_columns=custom_redshift_columns)
+            msh.configure_session_helper()
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
+                                custom_redshift_columns=custom_redshift_columns)
 
-        mock_create_schema.assert_called_once_with(
-            redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
+            mock_create_schema.assert_called_once_with(
+                redshift_params['schema_name'], redshift_params['db_name'], redshift_params['iam_role'], msh)
 
     @patch('s3parq.publish_redshift.create_custom_table')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_custom_publish_table_publish(self, mock_session_helper, mock_create_custom_table):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = ["colA", "colB", "colC"]
-        redshift_params = self.setup_redshift_params()
-        msh = mock_session_helper(
-            region=redshift_params['region'],
-            cluster_id=redshift_params['cluster_id'],
-            host=redshift_params['host'],
-            port=redshift_params['port'],
-            db_name=redshift_params['db_name']
-        )
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = ["colA", "colB", "colC"]
+            redshift_params = self.setup_redshift_params()
+            msh = mock_session_helper(
+                region=redshift_params['region'],
+                cluster_id=redshift_params['cluster_id'],
+                host=redshift_params['host'],
+                port=redshift_params['port'],
+                db_name=redshift_params['db_name']
+            )
 
-        msh.configure_session_helper()
-        parq.custom_publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
-                     custom_redshift_columns=custom_redshift_columns)
+            msh.configure_session_helper()
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
+                                custom_redshift_columns=custom_redshift_columns)
 
-        mock_create_custom_table.assert_called_once_with(
-            redshift_params['table_name'], redshift_params['schema_name'], partitions, parq.s3_url(bucket, key), custom_redshift_columns, msh)
+            mock_create_custom_table.assert_called_once_with(
+                redshift_params['table_name'], redshift_params['schema_name'], partitions, parq.s3_url(bucket, key), custom_redshift_columns, msh)
 
     @patch('s3parq.publish_redshift.create_custom_table')
     @patch('s3parq.publish_parq.SessionHelper')
     def test_custom_table_publish_mixed_type_column(self, mock_session_helper, mock_create_custom_table):
-        dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
-        bucket, key = self.setup_s3()
-        partitions = []
-        redshift_params = self.setup_redshift_params()
-        msh = mock_session_helper(
-            region=redshift_params['region'],
-            cluster_id=redshift_params['cluster_id'],
-            host=redshift_params['host'],
-            port=redshift_params['port'],
-            db_name=redshift_params['db_name']
-        )
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = []
+            redshift_params = self.setup_redshift_params()
+            msh = mock_session_helper(
+                region=redshift_params['region'],
+                cluster_id=redshift_params['cluster_id'],
+                host=redshift_params['host'],
+                port=redshift_params['port'],
+                db_name=redshift_params['db_name']
+            )
 
-        msh.configure_session_helper()
+            msh.configure_session_helper()
 
-        dataframe.iat[1, dataframe.columns.get_loc("colA")] = 45
+            dataframe.iat[1, dataframe.columns.get_loc("colA")] = 45
 
-        parq.custom_publish(bucket=bucket, key=key,
-                     dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
-                     custom_redshift_columns=custom_redshift_columns)
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
+                                custom_redshift_columns=custom_redshift_columns)
 
-        mock_create_custom_table.assert_called_once_with(
-            redshift_params['table_name'], redshift_params['schema_name'], partitions, parq.s3_url(bucket, key), custom_redshift_columns, msh)
+            mock_create_custom_table.assert_called_once_with(
+                redshift_params['table_name'], redshift_params['schema_name'], partitions, parq.s3_url(bucket, key), custom_redshift_columns, msh)
