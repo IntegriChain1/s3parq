@@ -122,7 +122,7 @@ Use the `custom_publish` function with a `custom_redshift_columns` dictionary to
 
 ## Changelog
 
-### 2.1.11
+### 2.1.12
 - Corrected chunking mechanism in publish to avoid having empty last chunk.
 
 ### 2.1.11
