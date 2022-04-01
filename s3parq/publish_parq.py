@@ -307,14 +307,15 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
         dtype = dtype.name
         if dtype == 'object':
             if custom_redshift_columns:
-                # Detect if the Pandas object column contains Python decimal objects. 
+                # Detect if the Pandas object column contains Python decimal objects.
                 if "[Decimal(" in str(dataframe[col].values)[:9]:
-                    # If Python decimal objects are present, parse out the precision and scale 
-                    # from the custom_redshift_columns dictionary to use when converting 
+                    # If Python decimal objects are present, parse out the precision and scale
+                    # from the custom_redshift_columns dictionary to use when converting
                     # to PyArrow's decimal128 data type.
                     s = custom_redshift_columns[col]
-                    precision = int(s[s.find('DECIMAL(')+len('DECIMAL('):s.rfind(',')].strip())
-                    scale = int(s[s.find(',')+len(','):s.rfind(')')].strip())
+                    precision = int(
+                        s[s.find('DECIMAL(') + len('DECIMAL('):s.rfind(',')].strip())
+                    scale = int(s[s.find(',') + len(','):s.rfind(')')].strip())
                     pa_type = pa.decimal128(precision=precision, scale=scale)
                 else:
                     pa_type = pa.string()
@@ -325,7 +326,7 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
         elif dtype.startswith('int64'):
             pa_type = pa.int64()
         elif dtype.startswith('int8'):
-            pa_type = pa.int8()  
+            pa_type = pa.int8()
         elif dtype.startswith('Int32'):
             dataframe[col] = dataframe.astype({col: 'object'})
             pa_type = pa.int32()
@@ -360,7 +361,7 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list, custom
     Args:
         dataframe (pd.DataFrame): Dataframe to parse the types of
         partitions (list): Partitions in the dataframe to get the type of
-        custom_redshift_columns (dict, Optional): 
+        custom_redshift_columns (dict, Optional):
             This dictionary contains custom column data type definitions for redshift.
             The params should be formatted as follows:
                 - column name (str)
@@ -398,7 +399,7 @@ def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list, custom
 def _sized_dataframes(dataframe: pd.DataFrame) -> tuple:
     """ Determines optimal chunks to publish the dataframe in. In smaller dataframes
     this may be the whole dataframe.
-    This is determined by the hard values of 60MB being ideal for Spectrum, and 
+    This is determined by the hard values of 60MB being ideal for Spectrum, and
     assumed compression ratio for dataframes to parquet being ~4; the bytes per
     row are then estimated and then chunks are determined.
 
@@ -447,14 +448,10 @@ ideal size: {ideal_size} bytes
     logger.info(
         f"Sized out {len(range(0, num_rows, rows_per_partition))} dataframes.")
     for index, lower in enumerate(range(0, num_rows, rows_per_partition)):
-        lower = lower if lower == 0 else lower + 1
         if index == num_partitions:
             upper = num_rows
         else:
-            if lower == 0:
-                upper = lower + rows_per_partition + 1
-            else:
-                upper = lower + rows_per_partition
+            upper = lower + rows_per_partition
 
         yield {'lower': lower, 'upper': upper}
 
@@ -552,6 +549,7 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
     logger.info("Done writing to S3.")
 
     return files
+
 
 def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, custom_redshift_columns: dict, redshift_params: dict = None) -> List[str]:
     """ Dataframe to S3 Parquet Publisher with a CUSTOM redshift column definition.

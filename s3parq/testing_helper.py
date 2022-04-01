@@ -80,8 +80,7 @@ def sorted_dfs_equal_by_pandas_testing(df1: pd.DataFrame, df2: pd.DataFrame) -> 
 # START SETUP BASED
 
 
-@moto.mock_s3
-def setup_files_list(count: int = 100, bucket: str = None, key: str = None):
+def setup_files_list(count: int = 100, bucket: str = None, key: str = None, s3_client=None):
     """ Creates temporary files and publishes them to the mocked S3 to test fetches,
     will fill in unsupplied parameters with random values or defaults
 
@@ -102,7 +101,6 @@ def setup_files_list(count: int = 100, bucket: str = None, key: str = None):
     if not bucket:
         bucket = setup_random_string()
     temp_file_names = []
-    s3_client = boto3.client('s3')
     s3_client.create_bucket(Bucket=bucket)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -112,7 +110,7 @@ def setup_files_list(count: int = 100, bucket: str = None, key: str = None):
                 temp_file_names.append(str(tail))
                 with open(t.name, 'rb') as data:
                     s3_client.upload_fileobj(
-                        data, Bucket=bucket, Key=(key+"/"+tail + ".parquet"))
+                        data, Bucket=bucket, Key=(key + "/" + tail + ".parquet"))
 
     retrieval_ops = {
         "bucket": bucket,
@@ -191,9 +189,6 @@ def setup_partitioned_parquet(
 
     with ExitStack() as stack:
         tmp_dir = stack.enter_context(tempfile.TemporaryDirectory())
-        if not s3_client:
-            stack.enter_context(moto.mock_s3())
-            s3_client = boto3.client('s3')
 
         s3_client.create_bucket(Bucket=bucket)
 
@@ -262,7 +257,7 @@ def setup_nons3parq_parquet(
 
         # generate the local parquet tree
         table = pa.Table.from_pandas(dataframe)
-        pq.write_to_dataset(table,root_path=str(tmp_dir), partition_cols=[])
+        pq.write_to_dataset(table, root_path=str(tmp_dir), partition_cols=[])
 
         parquet_paths = []
 
@@ -283,16 +278,18 @@ def setup_random_string(min_len: int = 0, max_len: int = 10):
     """ Create a random string of either given min_lento max_len or default 0 to 10 """
     return ''.join([random.choice(ascii_lowercase) for x in range(min_len, max_len)])
 
+
 def setup_custom_redshift_columns_and_dataframe():
-    """ Create a custom_redshift_columns dictionary that contains redshift column definitions and corresponding mock dataframe """ 
-    sample_data = {'colA': ["A","B","C"], 'colB': [4,5,6], 'colC': [4.12,5.22,6.57], 'colD': [4.1289,5.22,6.577], 'colE': ["test1","test2","test3"], 'colF': [True,False,True]}
+    """ Create a custom_redshift_columns dictionary that contains redshift column definitions and corresponding mock dataframe """
+    sample_data = {'colA': ["A", "B", "C"], 'colB': [4, 5, 6], 'colC': [4.12, 5.22, 6.57], 'colD': [
+        4.1289, 5.22, 6.577], 'colE': ["test1", "test2", "test3"], 'colF': [True, False, True]}
     dataframe = pd.DataFrame(data=sample_data)
 
-    custom_redshift_columns = {"colA":"VARCHAR(1000)", 
-                            "colB":"BIGINT",
-                            "colC":"REAL",
-                            "colD":"DECIMAL(5,4)",
-                            "colE":"VARCHAR",
-                            "colF":"BOOLEAN"}
+    custom_redshift_columns = {"colA": "VARCHAR(1000)",
+                               "colB": "BIGINT",
+                               "colC": "REAL",
+                               "colD": "DECIMAL(5,4)",
+                               "colE": "VARCHAR",
+                               "colF": "BOOLEAN"}
 
     return (dataframe, custom_redshift_columns)
