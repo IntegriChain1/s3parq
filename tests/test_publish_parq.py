@@ -15,7 +15,8 @@ from s3parq.testing_helper import (
     setup_grouped_dataframe,
     setup_random_string,
     sorted_dfs_equal_by_pandas_testing,
-    setup_custom_redshift_columns_and_dataframe
+    setup_custom_redshift_columns_and_dataframe,
+    setup_custom_redshift_columns_and_dataframe_with_null
 )
 
 
@@ -447,6 +448,31 @@ class Test:
             msh.configure_session_helper()
 
             dataframe.iat[1, dataframe.columns.get_loc("colA")] = 45
+
+            parq.custom_publish(bucket=bucket, key=key,
+                                dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
+                                custom_redshift_columns=custom_redshift_columns)
+
+            mock_create_custom_table.assert_called_once_with(
+                redshift_params['table_name'], redshift_params['schema_name'], partitions, parq.s3_url(bucket, key), custom_redshift_columns, msh)
+
+    @patch('s3parq.publish_redshift.create_custom_table')
+    @patch('s3parq.publish_parq.SessionHelper')
+    def test_custom_table_publish_null_in_int_column(self, mock_session_helper, mock_create_custom_table):
+        with get_s3_client() as s3_client:
+            dataframe, custom_redshift_columns = setup_custom_redshift_columns_and_dataframe_with_null()
+            bucket, key = self.setup_s3(s3_client)
+            partitions = []
+            redshift_params = self.setup_redshift_params()
+            msh = mock_session_helper(
+                region=redshift_params['region'],
+                cluster_id=redshift_params['cluster_id'],
+                host=redshift_params['host'],
+                port=redshift_params['port'],
+                db_name=redshift_params['db_name']
+            )
+
+            msh.configure_session_helper()
 
             parq.custom_publish(bucket=bucket, key=key,
                                 dataframe=dataframe, partitions=partitions, redshift_params=redshift_params,
