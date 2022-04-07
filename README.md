@@ -122,6 +122,9 @@ Use the `custom_publish` function with a `custom_redshift_columns` dictionary to
 
 ## Changelog
 
+### 2.1.13
+- Corrected bug to support Int32 and Int64 data types
+
 ### 2.1.12
 - Corrected chunking mechanism in publish to avoid having empty last chunk.
 

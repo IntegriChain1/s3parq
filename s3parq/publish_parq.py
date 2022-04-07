@@ -182,7 +182,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
         table = pa.Table.from_pandas(
             df=dataframe, schema=_parquet_schema(dataframe, custom_redshift_columns=custom_redshift_columns), preserve_index=False)
     except pa.lib.ArrowTypeError:
-        logger.warn(
+        logger.warning(
             "Dataframe conversion to pyarrow table failed, checking object columns for mixed types")
         dataframe_dtypes = dataframe.dtypes.to_dict()
         object_columns = [
@@ -190,7 +190,7 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
             col for col, col_type in dataframe_dtypes.items() if col_type == "object" and "[Decimal(" not in str(dataframe[col].values)[:9]]
         for object_col in object_columns:
             if not dataframe[object_col].apply(isinstance, args=[str]).all():
-                logger.warn(
+                logger.warning(
                     f"Dataframe column : {object_col} : in this chunk is type object but contains non-strings, converting to all-string column")
                 dataframe[object_col] = dataframe[object_col].astype(str)
 
@@ -328,10 +328,10 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
         elif dtype.startswith('int8'):
             pa_type = pa.int8()
         elif dtype.startswith('Int32'):
-            dataframe[col] = dataframe.astype({col: 'object'})
+            dataframe[col] = dataframe[col].astype({col: 'object'})
             pa_type = pa.int32()
         elif dtype.startswith('Int64'):
-            dataframe[col] = dataframe.astype({col: 'object'})
+            dataframe[col] = dataframe[col].astype({col: 'object'})
             pa_type = pa.int64()
         elif dtype.startswith('float32'):
             pa_type = pa.float32()

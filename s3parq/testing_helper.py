@@ -5,6 +5,7 @@ import logging
 import moto
 import os
 import pandas as pd
+import numpy as np
 from pandas.util.testing import assert_frame_equal
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -291,5 +292,22 @@ def setup_custom_redshift_columns_and_dataframe():
                                "colD": "DECIMAL(5,4)",
                                "colE": "VARCHAR",
                                "colF": "BOOLEAN"}
+
+    return (dataframe, custom_redshift_columns)
+
+
+def setup_custom_redshift_columns_and_dataframe_with_null():
+    """ Create a custom_redshift_columns dictionary that contains redshift column definitions and corresponding mock dataframe """
+    sample_data = {'colA': ["A", "B", "C"], 'colB': [4, np.NaN, 6], 'colC': [4.12, 5.22, 6.57], 'colD': [
+        4.1289, 5.22, 6.577], 'colE': ["test1", "test2", "test3"], 'colF': [True, False, True], 'colG': [4, np.NaN, 6], }
+    dataframe = pd.DataFrame(data=sample_data)
+
+    custom_redshift_columns = {"colA": "VARCHAR(1000)",
+                               "colB": "BIGINT",
+                               "colC": "REAL",
+                               "colD": "DECIMAL(5,4)",
+                               "colE": "VARCHAR",
+                               "colF": "BOOLEAN",
+                               "colG": "INT"}
 
     return (dataframe, custom_redshift_columns)
