@@ -179,8 +179,10 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
     logger.info("Writing to S3...")
 
     try:
+        (schema, frame) = _parquet_schema(dataframe,
+                                          custom_redshift_columns=custom_redshift_columns)
         table = pa.Table.from_pandas(
-            df=dataframe, schema=_parquet_schema(dataframe, custom_redshift_columns=custom_redshift_columns), preserve_index=False)
+            df=frame, schema=schema, preserve_index=False)
     except pa.lib.ArrowTypeError:
         logger.warning(
             "Dataframe conversion to pyarrow table failed, checking object columns for mixed types")
@@ -195,8 +197,10 @@ def _gen_parquet_to_s3(bucket: str, key: str, dataframe: pd.DataFrame,
                 dataframe[object_col] = dataframe[object_col].astype(str)
 
         logger.info("Retrying conversion to pyarrow table")
+        (schema, frame) = _parquet_schema(dataframe,
+                                          custom_redshift_columns=custom_redshift_columns)
         table = pa.Table.from_pandas(
-            df=dataframe, schema=_parquet_schema(dataframe, custom_redshift_columns=custom_redshift_columns), preserve_index=False)
+            df=frame, schema=schema, preserve_index=False)
 
     uri = s3_url(bucket, key)
     logger.debug(f"Writing to s3 location: {uri}...")
@@ -288,7 +292,7 @@ def _get_dataframe_datatypes(dataframe: pd.DataFrame, partitions=[], use_parts=F
     return types
 
 
-def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = None) -> pa.Schema:
+def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = None):
     """ Translates pandas dtypes to PyArrow types and creates a Schema from them
 
     Args:
@@ -301,6 +305,7 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
 
     Returns:
         PyArrow Schema of the given dataframe
+        Potentially modified Dataframe
     """
     fields = []
     for col, dtype in dataframe.dtypes.items():
@@ -352,7 +357,7 @@ def _parquet_schema(dataframe: pd.DataFrame, custom_redshift_columns: dict = Non
                 f"Error: {dtype} is not a datatype which can be mapped to Parquet using s3parq.")
         fields.append(pa.field(col, pa_type))
 
-    return pa.schema(fields=fields)
+    return (pa.schema(fields=fields), dataframe)
 
 
 def _parse_dataframe_col_types(dataframe: pd.DataFrame, partitions: list, custom_redshift_columns: dict = None) -> dict:

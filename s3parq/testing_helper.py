@@ -298,16 +298,15 @@ def setup_custom_redshift_columns_and_dataframe():
 
 def setup_custom_redshift_columns_and_dataframe_with_null():
     """ Create a custom_redshift_columns dictionary that contains redshift column definitions and corresponding mock dataframe """
-    sample_data = {'colA': ["A", "B", "C"], 'colB': [4, np.NaN, 6], 'colC': [4.12, 5.22, 6.57], 'colD': [
-        4.1289, 5.22, 6.577], 'colE': ["test1", "test2", "test3"], 'colF': [True, False, True], 'colG': [4, np.NaN, 6], }
+    sample_data = {'colA': [1, 2, np.NaN], 'colB': ['DDD', None, 'FFF'],
+                   'colC': [pd.Timestamp('20131213 11:59:59.999999999'), None, pd.Timestamp('20131213 11:59:59.999999999')], 'colE': [7.5, 3.4, np.NaN]}
+
     dataframe = pd.DataFrame(data=sample_data)
 
-    custom_redshift_columns = {"colA": "VARCHAR(1000)",
-                               "colB": "BIGINT",
-                               "colC": "REAL",
-                               "colD": "DECIMAL(5,4)",
-                               "colE": "VARCHAR",
-                               "colF": "BOOLEAN",
-                               "colG": "INT"}
+    custom_redshift_columns = {"colA": "INTEGER",
+                               "colB": "VARCHAR",
+                               "colC": "TIMESTAMP",
+                               "colE": "DECIMAL(7,2)"
+                               }
 
     return (dataframe, custom_redshift_columns)
