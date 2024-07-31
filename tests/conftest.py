@@ -1,5 +1,19 @@
 import pytest
+import os
+from moto.server import ThreadedMotoServer
 
+@pytest.fixture
+async def mock_boto():
+    server = ThreadedMotoServer(port=0)
+
+    server.start()
+    port = server._server.socket.getsockname()[1]
+    os.environ["AWS_ENDPOINT_URL"] = f"http://127.0.0.1:{port}"
+
+    yield
+
+    del os.environ["AWS_ENDPOINT_URL"]
+    server.stop()
 
 def pytest_addoption(parser):
     parser.addoption(
