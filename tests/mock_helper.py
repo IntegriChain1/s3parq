@@ -1,7 +1,7 @@
 import os
 import pytest
 import boto3
-from moto import mock_s3
+from moto import mock_aws
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -13,18 +13,18 @@ import tempfile
 import warnings
 
 
-@mock_s3
+@mock_aws
 class MockHelper:
     """ creates some helpful dataset stuff.
         - dataframe is the frame created
-        - s3_bucket is the test bucket that has been populated 
-        be sure to wrap this with moto @mock_s3 if you want to mock it
+        - s3_bucket is the test bucket that has been populated
+        be sure to wrap this with moto @mock_aws if you want to mock it
     """
 
     def __init__(self, count=1000000, s3=False, files=False):
         """ If s3 then will populate the s3 bucket with partitioned parquet. """
 
-        warnings.warn("MockHelper is a mess and will be removed in s3parq version 2.20", 
+        warnings.warn("MockHelper is a mess and will be removed in s3parq version 2.20",
             DeprecationWarning)
 
         self._dataframe = self.setup_grouped_dataframe(count=count)

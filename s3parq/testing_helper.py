@@ -6,7 +6,7 @@ import moto
 import os
 import pandas as pd
 import numpy as np
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 import pyarrow as pa
 import pyarrow.parquet as pq
 import random
@@ -168,7 +168,7 @@ def setup_partitioned_parquet(
             will be the default if not supplied
         s3_client (boto3 S3 client, Optional): The started S3 client that boto
             uses - NOTE: this should be made under a moto S3 mock!
-            If it is not provided, a session is crafted under moto.mock_s3
+            If it is not provided, a session is crafted under moto.mock_aws
 
     Returns:
         A tuple of the bucket and the published parquet file paths
@@ -236,7 +236,7 @@ def setup_nons3parq_parquet(
             string if not supplied
         s3_client (boto3 S3 client, Optional): The started S3 client that boto
             uses - NOTE: this should be made under a moto S3 mock!
-            If it is not provided, a session is crafted under moto.mock_s3
+            If it is not provided, a session is crafted under moto.mock_aws
 
     Returns:
         A tuple of the bucket and the published parquet file paths
@@ -251,7 +251,7 @@ def setup_nons3parq_parquet(
     with ExitStack() as stack:
         tmp_dir = stack.enter_context(tempfile.TemporaryDirectory())
         if not s3_client:
-            stack.enter_context(moto.mock_s3())
+            stack.enter_context(moto.mock_aws())
             s3_client = boto3.client('s3')
 
         s3_client.create_bucket(Bucket=bucket)

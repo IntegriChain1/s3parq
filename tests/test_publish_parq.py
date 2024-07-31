@@ -1,7 +1,7 @@
 import boto3
 from dfmock import DFMock
 from mock import patch
-from moto import mock_s3
+from moto import mock_aws
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -22,7 +22,7 @@ from s3parq.testing_helper import (
 
 @contextlib.contextmanager
 def get_s3_client():
-    with moto.mock_s3():
+    with moto.mock_aws():
         yield boto3.client('s3')
 
 
