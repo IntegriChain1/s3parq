@@ -96,7 +96,7 @@ class Test():
         with mock_session_helper.db_session_scope() as mock_scope:
             publish_redshift.create_table(table_name, schema_name, columns,
                                           partitions, path, mock_session_helper)
-            assert mock_scope.execute.called_once_with(expected_sql)
+            assert mock_scope.execute.assert_called_once_with(expected_sql)
 
     # Test that the function is called with the table name without partitions
     @patch('s3parq.publish_redshift.SessionHelper')
@@ -119,7 +119,7 @@ class Test():
         with mock_session_helper.db_session_scope() as mock_scope:
             publish_redshift.create_table(table_name, schema_name, columns,
                                           partitions, path, mock_session_helper)
-            assert mock_scope.execute.called_once_with(expected_sql)
+            assert mock_scope.execute.assert_called_once_with(expected_sql)
 
     def test_gets_proper_partitions(self):
         test_str = '/some/path/to/data/banana=33/orange=65/apple=abcd/xyz.parquet'
@@ -198,7 +198,7 @@ class Test():
         with mock_session_helper.db_session_scope() as mock_scope:
             publish_redshift.create_partitions(
                 bucket, schema_name, table_name, filepath, mock_session_helper)
-            assert mock_scope.execute.called_once_with(expected_sql)
+            assert mock_scope.execute.assert_called_once_with(expected_sql)
 
     # Test to check that the passed in datatype maps correctly
     def test_datatype_mapper(self):
@@ -237,7 +237,7 @@ class Test():
         with mock_session_helper.db_session_scope() as mock_scope:
             publish_redshift.create_custom_table(table_name, schema_name,
                                           partitions, path, custom_redshift_columns, mock_session_helper)
-            assert mock_scope.execute.called_once_with(expected_sql)
+            assert mock_scope.execute.assert_called_once_with(expected_sql)
 
     # Verify function call for custom create table, no partitions
     @patch('s3parq.publish_redshift.SessionHelper')
@@ -263,4 +263,4 @@ class Test():
         with mock_session_helper.db_session_scope() as mock_scope:
             publish_redshift.create_custom_table(table_name, schema_name,
                                           partitions, path, custom_redshift_columns, mock_session_helper)
-            assert mock_scope.execute.called_once_with(expected_sql)
+            assert mock_scope.execute.assert_called_once_with(expected_sql)

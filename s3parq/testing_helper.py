@@ -197,10 +197,11 @@ def setup_partitioned_parquet(
         table = pa.Table.from_pandas(dataframe)
         pq.write_to_dataset(table,
                             root_path=str(tmp_dir),
+                            coerce_timestamps='ms',
+                            allow_truncated_timestamps=True,
                             partition_cols=list(
-                                partition_data_types.keys())
+                                partition_data_types.keys()),
                             )
-
         parquet_paths = []
 
         # traverse the local parquet tree

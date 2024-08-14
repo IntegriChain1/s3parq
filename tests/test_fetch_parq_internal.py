@@ -368,6 +368,7 @@ def test_s3_partitioned_parquet_to_dataframe():
         key = "fookey"
 
         df = setup_grouped_dataframe(count=10, columns=columns)
+        df["datetime_col"] = df["datetime_col"].astype('datetime64[us]')
         bucket, parquet_paths = setup_partitioned_parquet(
             dataframe=df,
             bucket=bucket,
@@ -386,8 +387,8 @@ def test_s3_partitioned_parquet_to_dataframe():
 
         full_response = pd.DataFrame()
         for path in parquet_paths:
-            full_response = full_response.append(fetch_parq._s3_parquet_to_dataframe(
-                bucket=bucket, key=path, partition_metadata=partition_types))
+            full_response = pd.concat([full_response, fetch_parq._s3_parquet_to_dataframe(
+                bucket=bucket, key=path, partition_metadata=partition_types)], ignore_index=True)
 
         assert full_response.shape == df.shape
         sorted_dfs_equal_by_pandas_testing(full_response, df)
