@@ -368,7 +368,6 @@ def test_s3_partitioned_parquet_to_dataframe():
         key = "fookey"
 
         df = setup_grouped_dataframe(count=10, columns=columns)
-        df["datetime_col"] = df["datetime_col"].astype('datetime64[us]')
         bucket, parquet_paths = setup_partitioned_parquet(
             dataframe=df,
             bucket=bucket,

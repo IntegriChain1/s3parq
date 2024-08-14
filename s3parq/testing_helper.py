@@ -145,6 +145,12 @@ def setup_grouped_dataframe(count: int = 100, columns: Dict = None):
                    }
     df.columns = columns
     df.generate_dataframe()
+    frame = df.dataframe
+    try:
+        # always seconds
+        frame['datetime_col'] = frame["datetime_col"].astype("datetime64[us]")
+    except KeyError:
+        pass
     return df.dataframe
 
 
@@ -299,8 +305,8 @@ def setup_custom_redshift_columns_and_dataframe():
 
 def setup_custom_redshift_columns_and_dataframe_with_null():
     """ Create a custom_redshift_columns dictionary that contains redshift column definitions and corresponding mock dataframe """
-    sample_data = {'colA': [1, 2, np.NaN], 'colB': ['DDD', None, 'FFF'],
-                   'colC': [pd.Timestamp('20131213 11:59:59.999999999'), None, pd.Timestamp('20131213 11:59:59.999999999')], 'colE': [7.5, 3.4, np.NaN]}
+    sample_data = {'colA': [1, 2, np.nan], 'colB': ['DDD', None, 'FFF'],
+                   'colC': [pd.Timestamp('20131213 11:59:59.999999999'), None, pd.Timestamp('20131213 11:59:59.999999999')], 'colE': [7.5, 3.4, np.nan]}
 
     dataframe = pd.DataFrame(data=sample_data)
 

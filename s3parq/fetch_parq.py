@@ -303,11 +303,7 @@ def convert_type(val: Any, dtype: str) -> Any:
             return datetime.datetime.strptime(
                 val, format)
         except ValueError:
-            url_parsed = parse.unquote(val)
-            # drop microseconds for compatibility
-            url_parsed = url_parsed.split('.')[0]
-            return datetime.datetime.strptime(
-                url_parsed, format)
+            return _coerce_datetime_partition(val)
     elif dtype == 'category':
         return pd.Category(val)
     elif dtype == 'bool' or dtype == 'boolean':
@@ -426,6 +422,15 @@ def _parse_partitions_and_values(file_paths: List[str], key: str) -> dict:
 
     return parts
 
+def _coerce_datetime_partition(partition_value:str) -> datetime.datetime:
+    """datetimes in pyarrow are fickle now as hive partitions.
+    This attempts to force a resolution from them
+    """
+    try:
+        return datetime.datetime.strptime(partition_value, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        partition_value = parse.unquote(partition_value).split('.')[0]
+        return datetime.datetime.strptime(partition_value, "%Y-%m-%d %H:%M:%S")
 
 def _get_partition_value_data_types(parsed_parts: dict, part_types: dict) -> dict:
     """ Uses the partitions with their known types to parse them out
@@ -447,7 +452,7 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict) -> dic
             parsed_parts[part] = set(map(float, values))
         elif part_type == 'datetime':
             parsed_parts[part] = set(
-                map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
+                map(lambda s: _coerce_datetime_partition(s), values))
         elif (part_type == 'bool') or (part_type == 'boolean'):
             parsed_parts[part] = set(map(bool, values))
         else:
@@ -527,7 +532,7 @@ def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, 
     temp_frames = []
 
     def append_to_temp(frame: pd.DataFrame):
-        temp_frames = pd.concat([temp_frames, frame], ignore_index=True)
+        temp_frames.append(frame)
 
     if parallel:
         with get_context("spawn").Pool() as pool:
