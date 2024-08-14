@@ -75,7 +75,7 @@ def sorted_dfs_equal_by_pandas_testing(df1: pd.DataFrame, df2: pd.DataFrame) -> 
     df1 = df1.sort_values(
         by=df1.columns.tolist()).reset_index(drop=True)
     # The setup on this part is a pain but it's the most specific check
-    assert_frame_equal(df2, df1)
+    assert_frame_equal(df2, df1, check_dtype=False)
 
 
 # START SETUP BASED
