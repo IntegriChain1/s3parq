@@ -2,7 +2,7 @@ import boto3
 import dfmock
 import moto
 import pandas as pd
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 import pytest
 
 from s3parq.fetch_parq import fetch
@@ -10,7 +10,7 @@ from s3parq.publish_parq import publish
 from s3parq.testing_helper import df_equal_by_set, sorted_dfs_equal_by_pandas_testing
 
 
-@moto.mock_s3
+@moto.mock_aws
 def test_end_to_end():
     # make a sample DF for all the tests
     df = dfmock.DFMock(count=10000)

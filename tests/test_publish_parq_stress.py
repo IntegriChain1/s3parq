@@ -1,13 +1,13 @@
 import boto3
 from dfmock import DFMock
-from moto import mock_s3
+from moto import mock_aws
 import pytest
 
 import s3parq.publish_parq as pub_parq
 
 
 @pytest.mark.slow
-@mock_s3
+@mock_aws
 def test_parquet_sizes():
     """ Running two tests - this needs to work with and without partitions """
     bucket = "testbucket"
@@ -28,7 +28,7 @@ def test_parquet_sizes():
 
 
 @pytest.mark.slow
-@mock_s3
+@mock_aws
 def test_parquet_sizes_with_partition():
     """ Running two tests - this needs to work with and without partitions """
     bucket = "testbucket"

@@ -23,15 +23,20 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7"
+        "Programming Language :: Python :: 3.8"
+        "Programming Language :: Python :: 3.9"
+        "Programming Language :: Python :: 3.10"
+        "Programming Language :: Python :: 3.11"
+        "Programming Language :: Python :: 3.12"
         ],
     packages=find_packages(exclude=("tests",)),
     include_package_data=True,
     install_requires=[
-            "pandas>=0.24.2, <1",
+            "pandas>=2.2.2, <3",
             "pyarrow>=0.13.0",
             "boto3>=1.9",
             "s3fs>=0.2",
-            "psycopg2==2.8.3",
+            "psycopg2>=2.8.3",
             "SQLAlchemy>=1.3"
     ]
 )

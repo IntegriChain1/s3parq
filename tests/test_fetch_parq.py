@@ -22,7 +22,7 @@ from s3parq.testing_helper import (
 
 @contextlib.contextmanager
 def get_s3_client():
-    with moto.mock_s3():
+    with moto.mock_aws():
         yield boto3.client('s3')
 
 

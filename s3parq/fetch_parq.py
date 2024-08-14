@@ -1,4 +1,5 @@
 import ast
+from urllib import parse
 import boto3
 from collections import OrderedDict
 import datetime
@@ -151,7 +152,7 @@ def get_max_partition_value(bucket: str, key: str, partition: str) -> any:
 
 def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: bool = True, accept_not_s3parq: bool = True) -> pd.DataFrame:
     """ S3 Parquet to Dataframe Fetcher.
-    This function handles the portion of work that will return a concatenated 
+    This function handles the portion of work that will return a concatenated
     dataframe based on the partition filters of the specified dataset.
 
     Args:
@@ -164,7 +165,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
                     The published partition to be applied to
                 - comparison (str):
                     Comparison function - one of: [ == , != , > , < , >= , <= ]
-                - values (List(any)): 
+                - values (List(any)):
                     Values to compare to - must match partition data type
                     May not use multiple values with the '<', '>' comparisons
         parallel (bool, Optional):
@@ -231,7 +232,7 @@ def fetch(bucket: str, key: str, filters: List[type(Filter)] = {}, parallel: boo
 
 
 def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, comparison_key: str, partition: str, reverse: bool = False, parallel: bool = True) -> pd.DataFrame:
-    """ Returns a dataframe of whats in the input dataset but not the comparison 
+    """ Returns a dataframe of whats in the input dataset but not the comparison
     dataset by the specified partition.
 
     Args:
@@ -241,7 +242,7 @@ def fetch_diff(input_bucket: str, input_key: str, comparison_bucket: str, compar
         comparison_key (str): The key to the dataset to compare against
         partition (str): The partition in the dataset to compare the values of
         reverse (bool, Optional): Determines if the operation should be inversed,
-            if True it will look for the values in comparison that are not 
+            if True it will look for the values in comparison that are not
             in the input (basically backwards). Defaults to False
         parallel (bool, Optional):
             Determines if multiprocessing should be used, defaults to True.
@@ -297,8 +298,12 @@ def convert_type(val: Any, dtype: str) -> Any:
     elif dtype == 'float':
         return float(val)
     elif dtype == 'datetime':
-        return datetime.datetime.strptime(
-            val, '%Y-%m-%d %H:%M:%S')
+        format = '%Y-%m-%d %H:%M:%S'
+        try:
+            return datetime.datetime.strptime(
+                val, format)
+        except ValueError:
+            return _coerce_datetime_partition(val)
     elif dtype == 'category':
         return pd.Category(val)
     elif dtype == 'bool' or dtype == 'boolean':
@@ -355,7 +360,7 @@ def get_all_files_list(bucket: str, key: str) -> list:
 
 
 def _get_partitions_and_types(first_file_key: str, bucket: str) -> dict:
-    """ Fetch a list of all the partitions actually there and their 
+    """ Fetch a list of all the partitions actually there and their
     datatypes. List may be different than passed list if not being used
     for filtering on.
     NOTE: This is pulled from the metadata. It is assumed that this package
@@ -417,6 +422,15 @@ def _parse_partitions_and_values(file_paths: List[str], key: str) -> dict:
 
     return parts
 
+def _coerce_datetime_partition(partition_value:str) -> datetime.datetime:
+    """datetimes in pyarrow are fickle now as hive partitions.
+    This attempts to force a resolution from them
+    """
+    try:
+        return datetime.datetime.strptime(partition_value, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        partition_value = parse.unquote(partition_value).split('.')[0]
+        return datetime.datetime.strptime(partition_value, "%Y-%m-%d %H:%M:%S")
 
 def _get_partition_value_data_types(parsed_parts: dict, part_types: dict) -> dict:
     """ Uses the partitions with their known types to parse them out
@@ -438,7 +452,7 @@ def _get_partition_value_data_types(parsed_parts: dict, part_types: dict) -> dic
             parsed_parts[part] = set(map(float, values))
         elif part_type == 'datetime':
             parsed_parts[part] = set(
-                map(lambda s: datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S"), values))
+                map(lambda s: _coerce_datetime_partition(s), values))
         elif (part_type == 'bool') or (part_type == 'boolean'):
             parsed_parts[part] = set(map(bool, values))
         else:
@@ -499,7 +513,7 @@ def _get_filtered_key_list(typed_parts: dict, filters: List[type(Filter)], key: 
 
 
 def _get_filtered_data(bucket: str, paths: List[str], partition_metadata: dict, parallel: bool = True) -> pd.DataFrame:
-    """ Gets the data based on the filtered object key list. Concatenates all 
+    """ Gets the data based on the filtered object key list. Concatenates all
     the separate parquet files.
 
     Args:
@@ -581,7 +595,7 @@ def _repopulate_partitions(partition_string: str, partition_metadata: dict) -> t
     if partition_metadata:
         for key, val in partitions.items():
             partitions[key] = convert_type(val, partition_metadata[key])
-    
+
     return partitions
 
 
@@ -616,7 +630,7 @@ def _validate_filter_rules(filters: List[type(Filter)]) -> None:
 
 def _validate_matching_filter_data_type(part_types, filters: List[type(Filter)]) -> None:
     """ Validate that the filters passed are matching to the partitions'
-    listed datatypes, otherwise throw a ValueError. 
+    listed datatypes, otherwise throw a ValueError.
     This includes validating comparisons too.
 
     Args:

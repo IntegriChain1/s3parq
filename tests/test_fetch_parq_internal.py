@@ -17,7 +17,7 @@ from s3parq.testing_helper import (
 
 @contextlib.contextmanager
 def get_s3_client():
-    with moto.mock_s3():
+    with moto.mock_aws():
         yield boto3.client('s3')
 
 
@@ -386,8 +386,8 @@ def test_s3_partitioned_parquet_to_dataframe():
 
         full_response = pd.DataFrame()
         for path in parquet_paths:
-            full_response = full_response.append(fetch_parq._s3_parquet_to_dataframe(
-                bucket=bucket, key=path, partition_metadata=partition_types))
+            full_response = pd.concat([full_response, fetch_parq._s3_parquet_to_dataframe(
+                bucket=bucket, key=path, partition_metadata=partition_types)], ignore_index=True)
 
         assert full_response.shape == df.shape
         sorted_dfs_equal_by_pandas_testing(full_response, df)

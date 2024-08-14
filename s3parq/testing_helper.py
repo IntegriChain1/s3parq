@@ -6,7 +6,7 @@ import moto
 import os
 import pandas as pd
 import numpy as np
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 import pyarrow as pa
 import pyarrow.parquet as pq
 import random
@@ -75,7 +75,7 @@ def sorted_dfs_equal_by_pandas_testing(df1: pd.DataFrame, df2: pd.DataFrame) -> 
     df1 = df1.sort_values(
         by=df1.columns.tolist()).reset_index(drop=True)
     # The setup on this part is a pain but it's the most specific check
-    assert_frame_equal(df2, df1)
+    assert_frame_equal(df2, df1, check_dtype=False)
 
 
 # START SETUP BASED
@@ -145,6 +145,12 @@ def setup_grouped_dataframe(count: int = 100, columns: Dict = None):
                    }
     df.columns = columns
     df.generate_dataframe()
+    frame = df.dataframe
+    try:
+        # always seconds
+        frame['datetime_col'] = frame["datetime_col"].astype("datetime64[us]")
+    except KeyError:
+        pass
     return df.dataframe
 
 
@@ -168,7 +174,7 @@ def setup_partitioned_parquet(
             will be the default if not supplied
         s3_client (boto3 S3 client, Optional): The started S3 client that boto
             uses - NOTE: this should be made under a moto S3 mock!
-            If it is not provided, a session is crafted under moto.mock_s3
+            If it is not provided, a session is crafted under moto.mock_aws
 
     Returns:
         A tuple of the bucket and the published parquet file paths
@@ -197,10 +203,11 @@ def setup_partitioned_parquet(
         table = pa.Table.from_pandas(dataframe)
         pq.write_to_dataset(table,
                             root_path=str(tmp_dir),
+                            coerce_timestamps='ms',
+                            allow_truncated_timestamps=True,
                             partition_cols=list(
-                                partition_data_types.keys())
+                                partition_data_types.keys()),
                             )
-
         parquet_paths = []
 
         # traverse the local parquet tree
@@ -236,7 +243,7 @@ def setup_nons3parq_parquet(
             string if not supplied
         s3_client (boto3 S3 client, Optional): The started S3 client that boto
             uses - NOTE: this should be made under a moto S3 mock!
-            If it is not provided, a session is crafted under moto.mock_s3
+            If it is not provided, a session is crafted under moto.mock_aws
 
     Returns:
         A tuple of the bucket and the published parquet file paths
@@ -251,7 +258,7 @@ def setup_nons3parq_parquet(
     with ExitStack() as stack:
         tmp_dir = stack.enter_context(tempfile.TemporaryDirectory())
         if not s3_client:
-            stack.enter_context(moto.mock_s3())
+            stack.enter_context(moto.mock_aws())
             s3_client = boto3.client('s3')
 
         s3_client.create_bucket(Bucket=bucket)
@@ -298,8 +305,8 @@ def setup_custom_redshift_columns_and_dataframe():
 
 def setup_custom_redshift_columns_and_dataframe_with_null():
     """ Create a custom_redshift_columns dictionary that contains redshift column definitions and corresponding mock dataframe """
-    sample_data = {'colA': [1, 2, np.NaN], 'colB': ['DDD', None, 'FFF'],
-                   'colC': [pd.Timestamp('20131213 11:59:59.999999999'), None, pd.Timestamp('20131213 11:59:59.999999999')], 'colE': [7.5, 3.4, np.NaN]}
+    sample_data = {'colA': [1, 2, np.nan], 'colB': ['DDD', None, 'FFF'],
+                   'colC': [pd.Timestamp('20131213 11:59:59.999999999'), None, pd.Timestamp('20131213 11:59:59.999999999')], 'colE': [7.5, 3.4, np.nan]}
 
     dataframe = pd.DataFrame(data=sample_data)
 

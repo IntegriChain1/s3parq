@@ -2,7 +2,7 @@ import boto3
 import dfmock
 import moto
 import pandas as pd
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 import pytest
 
 from s3parq.fetch_parq import fetch
@@ -11,7 +11,7 @@ from s3parq.testing_helper import df_equal_by_set, sorted_dfs_equal_by_pandas_te
 
 
 @pytest.mark.slow
-@moto.mock_s3
+@moto.mock_aws
 def test_end_to_end():
     df = dfmock.DFMock(count=100000)
     df.columns = {"string_options": {"option_count": 4, "option_type": "string"},
