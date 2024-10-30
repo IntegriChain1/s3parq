@@ -122,6 +122,9 @@ Use the `custom_publish` function with a `custom_redshift_columns` dictionary to
 
 ## Changelog
 
+### 2.1.15
+- Parallelization of publish and custom_publish
+
 ### 2.1.14
 - Corrected parquet_schema computation to support Int32 and Int64 data types
 
