@@ -1,15 +1,14 @@
 import boto3
 import s3fs
-import re
 import sys
 import logging
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from joblib import Parallel, delayed
 from typing import List
 from s3parq.session_helper import SessionHelper
 from s3parq import publish_redshift
-from sqlalchemy import Column, Integer, String
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +133,7 @@ def validate_redshift_params(redshift_params: dict) -> dict:
             params_key_message = f"Error: Required parameter {param} not found in passed redshift_params."
             raise KeyError(params_key_message)
 
-     # Ensure redshift table name is lowercase
+    # Ensure redshift table name is lowercase
     if redshift_params['table_name'] != redshift_params['table_name'].lower():
         logger.warning(
             f"Table name {redshift_params['table_name']} contains uppercase letters. Converting to lowercase...")
@@ -251,10 +250,10 @@ def _assign_partition_meta(bucket: str, key: str, dataframe: pd.DataFrame, parti
         for obj in page['Contents']:
             if obj['Key'].endswith(".parquet"):
                 head_obj = s3_client.head_object(Bucket=bucket, Key=obj['Key'])
-                if not 'partition_data_types' in head_obj['Metadata']:
+                if 'partition_data_types' not in head_obj['Metadata']:
                     all_files_without_meta.append(obj['Key'])
                     if redshift_params and partitions:
-                        sql_command = publish_redshift.create_partitions(
+                        publish_redshift.create_partitions(
                             bucket, redshift_params['schema_name'], redshift_params['table_name'], obj['Key'], session_helper)
 
     for obj in all_files_without_meta:
@@ -446,7 +445,6 @@ ideal size: {ideal_size} bytes
         return
 
     # math the number of estimated partitions
-    sized_frames = []
     num_partitions = int(row_size_est * num_rows / ideal_size)
     rows_per_partition = int(num_rows / num_partitions)
     # for each partition do the thing
@@ -459,6 +457,24 @@ ideal size: {ideal_size} bytes
             upper = lower + rows_per_partition
 
         yield {'lower': lower, 'upper': upper}
+
+
+def parallelized_publish(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns=None):
+    frame = pd.DataFrame(
+        dataframe[frame_params['lower']:frame_params['upper']])
+    _gen_parquet_to_s3(bucket=bucket,
+                       key=key,
+                       dataframe=frame,
+                       partitions=partitions,
+                       custom_redshift_columns=custom_redshift_columns)
+
+    return _assign_partition_meta(bucket=bucket,
+                                  key=key,
+                                  dataframe=frame,
+                                  partitions=partitions,
+                                  session_helper=session_helper,
+                                  redshift_params=redshift_params,
+                                  custom_redshift_columns=custom_redshift_columns)
 
 
 def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, redshift_params: dict = None) -> List[str]:
@@ -533,22 +549,11 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
     logger.debug("Begin writing to S3..")
 
     files = []
-    for frame_params in _sized_dataframes(dataframe):
-        logger.info(
-            f"Publishing dataframe chunk : {frame_params['lower']} to {frame_params['upper']}")
-        frame = pd.DataFrame(
-            dataframe[frame_params['lower']:frame_params['upper']])
-        _gen_parquet_to_s3(bucket=bucket,
-                           key=key,
-                           dataframe=frame,
-                           partitions=partitions)
 
-        published_files = _assign_partition_meta(bucket=bucket,
-                                                 key=key,
-                                                 dataframe=frame,
-                                                 partitions=partitions,
-                                                 session_helper=session_helper,
-                                                 redshift_params=redshift_params)
+    results = Parallel(n_jobs=-1, verbose=1)(delayed(parallelized_publish)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params)
+                                             for frame_params in _sized_dataframes(dataframe))
+
+    for published_files in results:
         files = files + published_files
 
     logger.info("Done writing to S3.")
@@ -558,22 +563,22 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
 
 def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFrame, custom_redshift_columns: dict, redshift_params: dict = None) -> List[str]:
     """ Dataframe to S3 Parquet Publisher with a CUSTOM redshift column definition.
-    Custom publish allows custom defined redshift column definitions to be used and 
-    enables support for Redshift's decimal data type. 
+    Custom publish allows custom defined redshift column definitions to be used and
+    enables support for Redshift's decimal data type.
     This function handles the portion of work that will see a dataframe converted
     to parquet and then published to the given S3 location.
     It supports partitions and will use the custom redshift columns defined in the
-    custom_redshift_columns dictionary when creating the table schema for the parquet file. 
+    custom_redshift_columns dictionary when creating the table schema for the parquet file.
     View the Custom Publishes section of s3parq's readme file for more guidance on formatting
-    the custom_redshift_columns dictionary. It also has the option to automatically publish up 
-    to Redshift Spectrum for the newly published parquet files. 
+    the custom_redshift_columns dictionary. It also has the option to automatically publish up
+    to Redshift Spectrum for the newly published parquet files.
 
     Args:
         bucket (str): S3 Bucket name
         key (str): S3 key to lead to the desired dataset
         partitions (List[str]): List of columns that should be partitioned on
         dataframe (pd.DataFrame): Dataframe to be published
-        custom_redshift_columns (dict): 
+        custom_redshift_columns (dict):
             This dictionary contains custom column data type definitions for redshift.
             The params should be formatted as follows:
                 - column name (str)
@@ -637,24 +642,11 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
     logger.debug("Begin writing to S3..")
 
     files = []
-    for frame_params in _sized_dataframes(dataframe):
-        logger.info(
-            f"Publishing dataframe chunk : {frame_params['lower']} to {frame_params['upper']}")
-        frame = pd.DataFrame(
-            dataframe[frame_params['lower']:frame_params['upper']])
-        _gen_parquet_to_s3(bucket=bucket,
-                           key=key,
-                           dataframe=frame,
-                           partitions=partitions,
-                           custom_redshift_columns=custom_redshift_columns)
 
-        published_files = _assign_partition_meta(bucket=bucket,
-                                                 key=key,
-                                                 dataframe=frame,
-                                                 partitions=partitions,
-                                                 session_helper=session_helper,
-                                                 redshift_params=redshift_params,
-                                                 custom_redshift_columns=custom_redshift_columns)
+    results = Parallel(n_jobs=-1, verbose=1)(delayed(parallelized_publish)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
+                                             for frame_params in _sized_dataframes(dataframe))
+
+    for published_files in results:
         files = files + published_files
 
     logger.info("Done writing to S3.")
