@@ -460,10 +460,6 @@ ideal size: {ideal_size} bytes
 
 
 def parallelized_publish(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns=None):
-    logger.info(
-        f"Publishing dataframe chunk : {frame_params['lower']} to {frame_params['upper']}")
-    logger.info(
-        f"Inside parallelized publish")
     frame = pd.DataFrame(
         dataframe[frame_params['lower']:frame_params['upper']])
     _gen_parquet_to_s3(bucket=bucket,
