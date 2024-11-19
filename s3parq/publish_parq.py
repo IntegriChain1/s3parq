@@ -459,7 +459,7 @@ ideal size: {ideal_size} bytes
         yield {'lower': lower, 'upper': upper}
 
 
-def parallelized_publish(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns=None):
+def publish_helper(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns=None):
     frame = pd.DataFrame(
         dataframe[frame_params['lower']:frame_params['upper']])
     _gen_parquet_to_s3(bucket=bucket,
@@ -550,11 +550,16 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
 
     files = []
 
-    results = Parallel(n_jobs=-1, verbose=1)(delayed(parallelized_publish)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params)
+    if redshift_params:
+        for frame_params in _sized_dataframes(dataframe):
+            published_files = publish_helper(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params)
+            files = files + published_files
+    else:
+        results = Parallel(n_jobs=-1, verbose=1)(delayed(publish_helper)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params)
                                              for frame_params in _sized_dataframes(dataframe))
+        for published_files in results:
+            files = files + published_files
 
-    for published_files in results:
-        files = files + published_files
 
     logger.info("Done writing to S3.")
 
@@ -643,11 +648,15 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
 
     files = []
 
-    results = Parallel(n_jobs=-1, verbose=1)(delayed(parallelized_publish)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
+    if redshift_params:
+        for frame_params in _sized_dataframes(dataframe):
+            published_files = publish_helper(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
+            files = files + published_files
+    else:
+        results = Parallel(n_jobs=-1, verbose=1)(delayed(publish_helper)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
                                              for frame_params in _sized_dataframes(dataframe))
-
-    for published_files in results:
-        files = files + published_files
+        for published_files in results:
+            files = files + published_files
 
     logger.info("Done writing to S3.")
 
