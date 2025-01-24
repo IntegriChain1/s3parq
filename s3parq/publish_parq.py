@@ -440,9 +440,10 @@ compression ratio: {compression_ratio}:1
 ideal size: {ideal_size} bytes
 """
     logger.debug(batch_log_message)
+    result = list()
     if ideal_size > frame_size_est:
-        yield {'lower': 0, 'upper': len(dataframe)}
-        return
+        result = [{'lower': 0, 'upper': len(dataframe)}]
+        return result
 
     # math the number of estimated partitions
     num_partitions = int(row_size_est * num_rows / ideal_size)
@@ -456,21 +457,20 @@ ideal size: {ideal_size} bytes
         else:
             upper = lower + rows_per_partition
 
-        yield {'lower': lower, 'upper': upper}
+        result.append({'lower': lower, 'upper': upper})
+    return result
 
+def publish_helper(dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns=None):
 
-def publish_helper(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns=None):
-    frame = pd.DataFrame(
-        dataframe[frame_params['lower']:frame_params['upper']])
     _gen_parquet_to_s3(bucket=bucket,
                        key=key,
-                       dataframe=frame,
+                       dataframe=dataframe,
                        partitions=partitions,
                        custom_redshift_columns=custom_redshift_columns)
 
     return _assign_partition_meta(bucket=bucket,
                                   key=key,
-                                  dataframe=frame,
+                                  dataframe=dataframe,
                                   partitions=partitions,
                                   session_helper=session_helper,
                                   redshift_params=redshift_params,
@@ -549,14 +549,21 @@ def publish(bucket: str, key: str, partitions: List[str], dataframe: pd.DataFram
     logger.debug("Begin writing to S3..")
 
     files = []
-
+    chunks = _sized_dataframes(dataframe)
+    # copies of variables to be passed to each parallel process
+    frames = [pd.DataFrame(dataframe[frame_params['lower']:frame_params['upper']]) for frame_params in chunks]
+    buckets = [bucket] * len(chunks)
+    keys = [key] * len(chunks)
+    Partitions = [partitions] * len(chunks)
+    Redshift_params = [redshift_params] * len(chunks)
+    Session_helper = [session_helper] * len(chunks)
     if redshift_params:
-        for frame_params in _sized_dataframes(dataframe):
-            published_files = publish_helper(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params)
+        for dataframe, bucket, key, partitions, session_helper, redshift_params in zip(frames,buckets,keys,Partitions,Session_helper,Redshift_params):
+            published_files = publish_helper(dataframe, bucket, key, partitions, session_helper, redshift_params)
             files = files + published_files
     else:
-        results = Parallel(n_jobs=-1, verbose=1)(delayed(publish_helper)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params)
-                                             for frame_params in _sized_dataframes(dataframe))
+        results = Parallel(n_jobs=-1, verbose=10, prefer='threads')(delayed(publish_helper)(dataframe, bucket, key, partitions, session_helper, redshift_params)
+                                             for dataframe, bucket, key, partitions, session_helper, redshift_params in zip(frames,buckets,keys,Partitions,Session_helper,Redshift_params))
         for published_files in results:
             files = files + published_files
 
@@ -647,14 +654,21 @@ def custom_publish(bucket: str, key: str, partitions: List[str], dataframe: pd.D
     logger.debug("Begin writing to S3..")
 
     files = []
-
+    chunks = _sized_dataframes(dataframe)
+    # copies of variables to be passed to each parallel process
+    frames = [pd.DataFrame(dataframe[frame_params['lower']:frame_params['upper']]) for frame_params in chunks]
+    buckets = [bucket] * len(chunks)
+    keys = [key] * len(chunks)
+    Partitions = [partitions] * len(chunks)
+    Redshift_params = [redshift_params] * len(chunks)
+    Session_helper = [session_helper] * len(chunks)
     if redshift_params:
-        for frame_params in _sized_dataframes(dataframe):
-            published_files = publish_helper(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
+        for dataframe, bucket, key, partitions, session_helper, redshift_params in zip(frames,buckets,keys,Partitions,Session_helper,Redshift_params):
+            published_files = publish_helper(dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
             files = files + published_files
     else:
-        results = Parallel(n_jobs=-1, verbose=1)(delayed(publish_helper)(frame_params, dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
-                                             for frame_params in _sized_dataframes(dataframe))
+        results = Parallel(n_jobs=-1, verbose=10, prefer='threads')(delayed(publish_helper)(dataframe, bucket, key, partitions, session_helper, redshift_params, custom_redshift_columns)
+                                             for dataframe, bucket, key, partitions, session_helper, redshift_params in zip(frames,buckets,keys,Partitions,Session_helper,Redshift_params))
         for published_files in results:
             files = files + published_files
 
