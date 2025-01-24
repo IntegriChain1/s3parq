@@ -122,6 +122,9 @@ Use the `custom_publish` function with a `custom_redshift_columns` dictionary to
 
 ## Changelog
 
+### 2.1.17
+- Correct handling of parallelization
+
 ### 2.1.16
 - Parallelization of publish and custom_publish except if publishing to spectrum.
 
